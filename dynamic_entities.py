@@ -69,12 +69,12 @@ parcel_entity = {
 				],
 				"properties": {
 					"project_id": {
-						"type": "string",
+						"type": "reference:Project",
 						"example": "1234567",
 						"description": "ID of the project this parcel belongs to"
 					},
 					"parcel_owner": {
-						"type": "string",
+						"type": "reference:Parcel",
 						"example": "hugo muller passport nr. 1234444",
 						"description": "legal identifier of landholder"
 					},
@@ -96,7 +96,7 @@ parcel_ownership_verification_entity = {
 				],
 				"properties": {
 					"parcel_id": {
-						"type": "string",
+						"type": "reference:Parcel",
 						"example": "3dece208-c95c-11f0-9041-54e1adfac5b1",
 						"description": "(uu)id of the parcel that gets verified"
 					},
@@ -129,12 +129,12 @@ parcel_verification_entity = {
 		],
 		"properties": {
 			"parcel_id": {
-				"type": "string",
+				"type": "reference:Parcel",
 				"example": "3dece208-c95c-11f0-9041-54e1adfac5b1",
 				"description": "(uu)id of the parcel that gets verified"
 			},
 			"project_id_": {
-						"type": "string",
+						"type": "reference:Project",
 						"example": "3dece208-c95c-11f0-9041-54e1adfac5b1",
 						"description": "ID of the project this parcel belongs to"
 			},
@@ -165,7 +165,7 @@ project_verification_entity = {
 		],
 		"properties": {
 			"project_id": {
-						"type": "string",
+						"type": "reference:Project",
 						"example": "3dece208-c95c-11f0-9041-54e1adfac5b1",
 						"description": "ID of the project verified"
 			},
@@ -192,12 +192,12 @@ parcel_monitoring_period_verification = {
 		],
 		"properties": {
 			"parcel_id": {
-				"type": "string",
+				"type": "reference:Parcel",
 				"example": "3dece208-c95c-11f0-9041-54e1adfac5b1",
 				"description": "(uu)id of the parcel that gets verified"
 			},
 			"project_id": {
-						"type": "string",
+						"type": "reference:Project",
 						"example": "3dece208-c95c-11f0-9041-54e1adfac5b1",
 						"description": "ID of the project this parcel belongs to"
 			},
@@ -228,7 +228,7 @@ project_monitoring_period_verification = {
 		],
 		"properties": {
 			"project_id": {
-						"type": "string",
+						"type": "reference:Project",
 						"example": "3dece208-c95c-11f0-9041-54e1adfac5b1",
 						"description": "ID of the project verified"
 			},

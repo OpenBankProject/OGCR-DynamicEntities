@@ -285,17 +285,17 @@ project_monitoring_period_verification = {
 		}
 	}}
 
+entities_data = [
+	(ENTITY_PROJECT, project_entity),
+	(ENTITY_PARCEL, parcel_entity),
+	(ENTITY_PARCEL_OWNERSHIP_VERIFICATION, parcel_ownership_verification_entity),
+	(ENTITY_PROJECT_PARCEL_VERIFICATION, parcel_verification_entity),
+	(ENTITY_PROJECT_VERIFICATION, project_verification_entity),
+	(ENTITY_PARCEL_MONITORING_PERIOD_VERIFICATION, parcel_monitoring_period_verification),
+	(ENTITY_PROJECT_MONITORING_PERIOD_VERIFICATION, project_monitoring_period_verification)
+	]
 
 def create_all_entities():
-	entities_data = [
-		(ENTITY_PROJECT, project_entity),
-		(ENTITY_PARCEL, parcel_entity),
-		(ENTITY_PARCEL_OWNERSHIP_VERIFICATION, parcel_ownership_verification_entity),
-		(ENTITY_PROJECT_PARCEL_VERIFICATION, parcel_verification_entity),
-		(ENTITY_PROJECT_VERIFICATION, project_verification_entity),
-		(ENTITY_PARCEL_MONITORING_PERIOD_VERIFICATION, parcel_monitoring_period_verification),
-		(ENTITY_PROJECT_MONITORING_PERIOD_VERIFICATION, project_monitoring_period_verification)
-	]
 
 	created_count = 0
 	failed_count = 0
@@ -314,3 +314,35 @@ def create_all_entities():
 
 	logger.info("")
 	logger.info(f"Entity Creation Summary: {created_count} created, {failed_count} failed")
+
+
+def add_entitlement_to_user(token, user_id, role_name, bank_id=""):
+	"""
+	Add an entitlement (role) to a specific user
+
+	Args:
+		token: DirectLogin authentication token
+		user_id: The ID of the user to grant the role to
+		role_name: The name of the role to grant (e.g., "CanGetAnyUser")
+		bank_id: Bank ID for bank-level roles, empty string "" for system-level roles
+
+	Returns:
+		Response JSON from the API
+	"""
+	url = f"{BASE_URL}/obp/v5.1.0/users/{user_id}/entitlements"
+	headers = {
+		"Authorization": f"DirectLogin token={token}",
+		"Content-Type": "application/json"
+	}
+
+	data = {
+		"bank_id": bank_id,
+		"role_name": role_name
+	}
+
+	try:
+		response = requests.post(url, headers=headers, json=data)
+	except requests.exceptions.RequestException as e:
+		logger.error(f"Error adding entitlement to user: {e}")
+	print(response)
+	return response.json()

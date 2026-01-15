@@ -1,14 +1,24 @@
-# Dynamic Entity Name Constants
-
-This document describes the entity name constants used throughout the project.
+# Entity Constants and Helper Functions
 
 ## Overview
 
-All dynamic entity names are defined as constants in `dynamic_entities.py` to ensure consistency across the codebase and make refactoring easier.
+This document describes the entity constants and helper functions used throughout the OGCR Dynamic Entities project. All entity names are centralized in `dynamic_entities.py` to ensure consistency across the codebase.
 
-## Constants
+## Configuration
 
-The following constants are available:
+The entity prefix is configurable via the `OBP_ENTITY_PREFIX` environment variable in the `.env` file:
+
+```bash
+OBP_ENTITY_PREFIX=ogcr3
+```
+
+This prefix is automatically converted to lowercase and used in all entity names.
+
+## Entity Name Constants
+
+All entity constants are defined in `dynamic_entities.py` and should be imported wherever entity names are needed.
+
+### Import Statement
 
 ```python
 from dynamic_entities import (
@@ -22,89 +32,122 @@ from dynamic_entities import (
 )
 ```
 
-## Entity Names (with OGCR2 prefix)
+### Available Constants
 
-| Constant | Value | Description |
-|----------|-------|-------------|
-| `ENTITY_PROJECT` | `OGCR2Project` | Carbon credit project |
-| `ENTITY_PARCEL` | `OGCR2Parcel` | Land parcel |
-| `ENTITY_PARCEL_OWNERSHIP_VERIFICATION` | `OGCR2Parcel_Own_Verify` | Parcel ownership verification |
-| `ENTITY_PROJECT_PARCEL_VERIFICATION` | `OGCR2Proj_Parcel_Verify` | Project-parcel verification (baseline) |
-| `ENTITY_PROJECT_VERIFICATION` | `OGCR2Proj_Verify` | Project verification |
-| `ENTITY_PARCEL_MONITORING_PERIOD_VERIFICATION` | `OGCR2Parcel_Mon_Per_Verify` | Parcel monitoring period verification |
-| `ENTITY_PROJECT_MONITORING_PERIOD_VERIFICATION` | `OGCR2Proj_Per_Verify` | Project period verification |
+| Constant | Example Value (prefix=ogcr3) | Description |
+|----------|------------------------------|-------------|
+| `ENTITY_PROJECT` | `ogcr3_project` | Carbon credit project |
+| `ENTITY_PARCEL` | `ogcr3_parcel` | Land parcel |
+| `ENTITY_PARCEL_OWNERSHIP_VERIFICATION` | `ogcr3_parcel_owner_verification` | Parcel ownership verification |
+| `ENTITY_PROJECT_PARCEL_VERIFICATION` | `ogcr3_project_parcel_verification` | Project-parcel verification (baseline) |
+| `ENTITY_PROJECT_VERIFICATION` | `ogcr3_project_verification` | Project verification |
+| `ENTITY_PARCEL_MONITORING_PERIOD_VERIFICATION` | `ogcr3_parcel_monitoring_period_verification` | Parcel monitoring period verification |
+| `ENTITY_PROJECT_MONITORING_PERIOD_VERIFICATION` | `ogcr3_project_monitoring_period_verification` | Project monitoring period verification |
 
-**Note:** The prefix is configurable via the `OBP_ENTITY_PREFIX` environment variable in `.env`
+## Helper Functions
 
-## Character Count Compliance
+Three helper functions are provided to generate consistent keys from entity constants:
 
-All entity names are kept under 32 characters to comply with API limitations:
+### `get_response_key(entity_constant)`
 
-- ✓ OGCR2Project (12 chars)
-- ✓ OGCR2Parcel (11 chars)
-- ✓ OGCR2Parcel_Own_Verify (22 chars)
-- ✓ OGCR2Proj_Parcel_Verify (23 chars)
-- ✓ OGCR2Proj_Verify (16 chars)
-- ✓ OGCR2Parcel_Mon_Per_Verify (26 chars)
-- ✓ OGCR2Proj_Per_Verify (20 chars)
+Generates the response key from an entity constant. This is used when parsing API responses.
 
-## Usage Examples
+**Usage:**
+```python
+from dynamic_entities import ENTITY_PROJECT, get_response_key
 
-### In main.py
+response = create_dynamic_entity_object(ENTITY_PROJECT, data, token)
+response_key = get_response_key(ENTITY_PROJECT)  # Returns: 'ogcr3_project'
+project_obj = response[response_key]
+```
+
+### `get_id_key(entity_constant)`
+
+Generates the ID key from an entity constant. This is used to extract object IDs from API responses.
+
+**Usage:**
+```python
+from dynamic_entities import ENTITY_PROJECT, get_response_key, get_id_key
+
+response = create_dynamic_entity_object(ENTITY_PROJECT, data, token)
+response_key = get_response_key(ENTITY_PROJECT)
+project_obj = response[response_key]
+
+id_key = get_id_key(ENTITY_PROJECT)  # Returns: 'ogcr3_project_id'
+project_id = project_obj[id_key]
+```
+
+### `get_list_key(entity_constant)`
+
+Generates the list key from an entity constant. This is used when fetching multiple objects.
+
+**Usage:**
+```python
+from dynamic_entities import ENTITY_PROJECT, get_list_key
+
+response = get_all_objects_for_system_dynamic_entity(ENTITY_PROJECT, token)
+list_key = get_list_key(ENTITY_PROJECT)  # Returns: 'ogcr3_project_list'
+projects = response[list_key]
+```
+
+## Complete Example
+
+Here's a complete example showing how to use entity constants and helper functions:
 
 ```python
 from dynamic_entities import (
     ENTITY_PROJECT,
-    ENTITY_PARCEL,
-    # ... other constants
+    get_response_key,
+    get_id_key,
+    get_list_key
 )
+from dynamic_entities_objects import create_dynamic_entity_object
 
-my_dynamic_entities_names = [
-    ENTITY_PROJECT,
-    ENTITY_PARCEL,
-    ENTITY_PARCEL_OWNERSHIP_VERIFICATION,
-    ENTITY_PROJECT_PARCEL_VERIFICATION,
-    ENTITY_PROJECT_VERIFICATION,
-    ENTITY_PARCEL_MONITORING_PERIOD_VERIFICATION,
-    ENTITY_PROJECT_MONITORING_PERIOD_VERIFICATION
-]
-```
+# Create a new project
+project_data = {
+    "project_owner": "John Smith - Passport: US123456789"
+}
 
-### In create_dummy_data.py
-
-```python
-from dynamic_entities import ENTITY_PROJECT, ENTITY_PARCEL
-
-# Create a project
 response = create_dynamic_entity_object(
-    ENTITY_PROJECT,
-    {"project_owner": "John Smith"},
+    ENTITY_PROJECT,  # Use constant instead of hardcoded string
+    project_data,
     token
 )
 
-# Create a parcel
-response = create_dynamic_entity_object(
-    ENTITY_PARCEL,
-    {
-        "project_id": project_id,
-        "parcel_owner": "John Smith",
-        "geo_data": '{"type":"Polygon",...}'
-    },
-    token
-)
+# Extract the project object using helper function
+response_key = get_response_key(ENTITY_PROJECT)
+project_obj = response[response_key]
+
+# Extract the project ID using helper function
+id_key = get_id_key(ENTITY_PROJECT)
+project_id = project_obj[id_key]
+
+print(f"Created project with ID: {project_id}")
+
+# Later, fetch all projects
+response = get_all_objects_for_system_dynamic_entity(ENTITY_PROJECT, token)
+list_key = get_list_key(ENTITY_PROJECT)
+all_projects = response[list_key]
 ```
 
-## Benefits
+## Entity Usage in Scripts
 
-1. **Type Safety**: IDE autocomplete and type checking
-2. **Refactoring**: Change entity names in one place
-3. **Consistency**: No typos or inconsistent naming
-4. **Documentation**: Clear definition of all entities
-5. **Maintainability**: Easier to update if naming conventions change
+### `main.py`
+- Uses all entity constants to manage the lifecycle of dynamic entities
+- Creates, deletes, and recreates entities
 
-## Relationships
+### `create_dummy_data.py`
+- Uses entity constants to create test data
+- Uses helper functions to parse API responses
 
-### Entity Hierarchy
+### `get_all_data.py`
+- Uses entity constants to fetch all data
+- Uses `get_list_key()` to extract object lists
+
+### `dynamic_entities_objects.py`
+- Uses entity constants in wrapper functions for creating entity objects
+
+## Entity Hierarchy
 
 ```
 Project (ENTITY_PROJECT)
@@ -113,11 +156,12 @@ Project (ENTITY_PROJECT)
 │   ├── Project-Parcel Verification (ENTITY_PROJECT_PARCEL_VERIFICATION)
 │   └── Parcel Monitoring Period Verification (ENTITY_PARCEL_MONITORING_PERIOD_VERIFICATION)
 ├── Project Verification (ENTITY_PROJECT_VERIFICATION)
-└── Project Period Verification (ENTITY_PROJECT_MONITORING_PERIOD_VERIFICATION)
+└── Project Monitoring Period Verification (ENTITY_PROJECT_MONITORING_PERIOD_VERIFICATION)
 ```
 
-### Foreign Key Relationships
+## Foreign Key Relationships
 
+- `ENTITY_PARCEL.project_id` → `ENTITY_PROJECT`
 - `ENTITY_PARCEL_OWNERSHIP_VERIFICATION.parcel_id` → `ENTITY_PARCEL`
 - `ENTITY_PROJECT_PARCEL_VERIFICATION.parcel_id` → `ENTITY_PARCEL`
 - `ENTITY_PROJECT_PARCEL_VERIFICATION.project_id` → `ENTITY_PROJECT`
@@ -125,3 +169,48 @@ Project (ENTITY_PROJECT)
 - `ENTITY_PARCEL_MONITORING_PERIOD_VERIFICATION.parcel_id` → `ENTITY_PARCEL`
 - `ENTITY_PARCEL_MONITORING_PERIOD_VERIFICATION.project_id` → `ENTITY_PROJECT`
 - `ENTITY_PROJECT_MONITORING_PERIOD_VERIFICATION.project_id` → `ENTITY_PROJECT`
+
+## Best Practices
+
+1. **Always use entity constants** - Never hardcode entity names as strings
+2. **Use helper functions** - Use `get_response_key()`, `get_id_key()`, and `get_list_key()` for consistency
+3. **Import from dynamic_entities** - All entity constants and helpers are in one place
+4. **Configure via .env** - Change the prefix in `.env` file, not in code
+
+## Migration Guide
+
+If you have hardcoded entity names in your code, replace them as follows:
+
+### Before (❌ Don't do this):
+```python
+# Hardcoded entity name
+response = create_entity_object("ogcr3_project", data, token)
+project_obj = response["ogcr3_project"]
+project_id = project_obj["ogcr3_project_id"]
+```
+
+### After (✅ Do this):
+```python
+from dynamic_entities import ENTITY_PROJECT, get_response_key, get_id_key
+
+# Use constants and helper functions
+response = create_entity_object(ENTITY_PROJECT, data, token)
+response_key = get_response_key(ENTITY_PROJECT)
+project_obj = response[response_key]
+id_key = get_id_key(ENTITY_PROJECT)
+project_id = project_obj[id_key]
+```
+
+## Troubleshooting
+
+### Issue: "KeyError: 'ogcr2_project'"
+**Solution:** The prefix has changed. Check your `.env` file and ensure `OBP_ENTITY_PREFIX` is set correctly.
+
+### Issue: Entity names don't match API
+**Solution:** Make sure you're using the entity constants from `dynamic_entities.py`, not hardcoded strings.
+
+### Issue: "NameError: name 'ENTITY_...' is not defined"
+**Solution:** Import the constant from `dynamic_entities`:
+```python
+from dynamic_entities import ENTITY_PROJECT  # or whichever constant you need
+```

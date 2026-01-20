@@ -34,8 +34,8 @@ obp_host = os.getenv('OBP_HOSTNAME', "http://obp-api-internal-route-obp.apps-crc
 
 # Check OBP API is reachable before attempting authentication
 def check_obp_api_health(base_url):
-	"""Check if the OBP API is reachable by calling /obp/v5.1.0/root"""
-	url = f"{base_url}/obp/v5.1.0/root"
+	"""Check if the OBP API is reachable by calling /obp/v6.0.0/root"""
+	url = f"{base_url}/obp/v6.0.0/root"
 	logger.info(f"Checking OBP API health at: {url}")
 	try:
 		response = requests.get(url, timeout=10)

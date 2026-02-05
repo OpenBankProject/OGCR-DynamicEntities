@@ -57,7 +57,7 @@ def create_system_dynamic_entity(entity_definition, token=None):
 	Returns:
 		dict: The API response
 	"""
-	url = f"{BASE_URL}/obp/v5.1.0/management/system-dynamic-entities"
+	url = f"{BASE_URL}/obp/v6.0.0/management/system-dynamic-entities"
 
 	headers = {
 		"Content-Type": "application/json"
@@ -82,8 +82,9 @@ def create_system_dynamic_entity(entity_definition, token=None):
 
 # Example 1: Customer Preferences Entity
 project_entity = {
-	"hasPersonalEntity": False,  # Creates both regular and 'my' endpoints
-	ENTITY_PROJECT: {
+	"entity_name": ENTITY_PROJECT,
+	"has_personal_entity": False,
+	"definition": {
 		"description": "a carbon credit project",
 		"required": [
 			"project_name",
@@ -223,73 +224,76 @@ project_entity = {
 				"description": "Monitoring period end date (ISO 8601)"
 			}
 		}
-	},
+	}
 }
 
 parcel_entity = {
-	"hasPersonalEntity": False,  # Creates both regular and 'my' endpoints
-	ENTITY_PARCEL: {
-				"description": "a piece of land",
-				"required": [
-					f"{ENTITY_PROJECT}_id",
-					"parcel_owner",
-					"geo_data"
-				],
-				"properties": {
-					f"{ENTITY_PROJECT}_id": {
-						"type": f"reference:{ENTITY_PROJECT}",
-						"example": "a8770fca-3d1d-47af-b6d0-7a6c3f124388",
-						"description": "ID of the project this parcel belongs to"
-					},
-					"parcel_owner": {
-						"type": "string",
-						"example": "hugo muller passport nr. 1234444",
-						"description": "legal identifier of landholder"
-					},
-					"geo_data": {
-						"type": "string",
-						"example": "some_geo_json",
-						"description": "a geojson polygon"
-					}
-				}
+	"entity_name": ENTITY_PARCEL,
+	"has_personal_entity": False,
+	"definition": {
+		"description": "a piece of land",
+		"required": [
+			f"{ENTITY_PROJECT}_id",
+			"parcel_owner",
+			"geo_data"
+		],
+		"properties": {
+			f"{ENTITY_PROJECT}_id": {
+				"type": f"reference:{ENTITY_PROJECT}",
+				"example": "a8770fca-3d1d-47af-b6d0-7a6c3f124388",
+				"description": "ID of the project this parcel belongs to"
+			},
+			"parcel_owner": {
+				"type": "string",
+				"example": "hugo muller passport nr. 1234444",
+				"description": "legal identifier of landholder"
+			},
+			"geo_data": {
+				"type": "string",
+				"example": "some_geo_json",
+				"description": "a geojson polygon"
+			}
+		}
 	}
 }
 
 parcel_ownership_verification_entity = {
-	"hasPersonalEntity": False,
-	ENTITY_PARCEL_OWNERSHIP_VERIFICATION: {
-				"description": "Verification of Landownership",
-				"required": [
-					f"{ENTITY_PARCEL}_id"
-				],
-				"properties": {
-					f"{ENTITY_PARCEL}_id": {
-						"type": f"reference:{ENTITY_PARCEL}",
-						"example": "3dece208-c95c-11f0-9041-54e1adfac5b1",
-						"description": "(uu)id of the parcel that gets verified"
-					},
-					"status_code": {
-						"type": "string",
-						"example": "verified",
-						"description": "in_progress, verified, failed"
-					},
-					"status_message": {
-						"type": "string",
-						"example": "could not find owner",
-						"description": "further explanation of status code"
-					},
-					"authority": {
-						"type": "string",
-						"example": "Mycountry cadastre",
-						"description": "name of  authority that verified the ownership"
-					}
-				}
+	"entity_name": ENTITY_PARCEL_OWNERSHIP_VERIFICATION,
+	"has_personal_entity": False,
+	"definition": {
+		"description": "Verification of Landownership",
+		"required": [
+			f"{ENTITY_PARCEL}_id"
+		],
+		"properties": {
+			f"{ENTITY_PARCEL}_id": {
+				"type": f"reference:{ENTITY_PARCEL}",
+				"example": "3dece208-c95c-11f0-9041-54e1adfac5b1",
+				"description": "(uu)id of the parcel that gets verified"
+			},
+			"status_code": {
+				"type": "string",
+				"example": "verified",
+				"description": "in_progress, verified, failed"
+			},
+			"status_message": {
+				"type": "string",
+				"example": "could not find owner",
+				"description": "further explanation of status code"
+			},
+			"authority": {
+				"type": "string",
+				"example": "Mycountry cadastre",
+				"description": "name of  authority that verified the ownership"
+			}
+		}
 	}
 }
 
 parcel_verification_entity = {
-	"hasPersonalEntity": False,  # Creates both regular and 'my' endpoints
-	ENTITY_PROJECT_PARCEL_VERIFICATION: {
+	"entity_name": ENTITY_PROJECT_PARCEL_VERIFICATION,
+	"has_personal_entity": False,
+	"definition": {
 		"description": "Verification of Project Claim Estimation",
 		"required": [
 			f"{ENTITY_PARCEL}_id",
@@ -302,9 +306,9 @@ parcel_verification_entity = {
 				"description": "(uu)id of the parcel that gets verified"
 			},
 			f"{ENTITY_PROJECT}_id": {
-					"type": f"reference:{ENTITY_PROJECT}",
-					"example": "3dece208-c95c-11f0-9041-54e1adfac5b1",
-					"description": "ID of the project this parcel belongs to"
+				"type": f"reference:{ENTITY_PROJECT}",
+				"example": "3dece208-c95c-11f0-9041-54e1adfac5b1",
+				"description": "ID of the project this parcel belongs to"
 			},
 			"status_code": {
 				"type": "string",
@@ -322,20 +326,22 @@ parcel_verification_entity = {
 				"description": "amount of carbon reduction calculated"
 			}
 		}
-	}}
+	}
+}
 
 project_verification_entity = {
-	"hasPersonalEntity": False,  # Creates both regular and 'my' endpoints
-	ENTITY_PROJECT_VERIFICATION: {
+	"entity_name": ENTITY_PROJECT_VERIFICATION,
+	"has_personal_entity": False,
+	"definition": {
 		"description": "Verification of Project",
 		"required": [
 			f"{ENTITY_PROJECT}_id"
 		],
 		"properties": {
 			f"{ENTITY_PROJECT}_id": {
-						"type": f"reference:{ENTITY_PROJECT}",
-						"example": "3dece208-c95c-11f0-9041-54e1adfac5b1",
-						"description": "ID of the project verified"
+				"type": f"reference:{ENTITY_PROJECT}",
+				"example": "3dece208-c95c-11f0-9041-54e1adfac5b1",
+				"description": "ID of the project verified"
 			},
 			"status_code": {
 				"type": "string",
@@ -348,11 +354,13 @@ project_verification_entity = {
 				"description": "further explanation of status code"
 			}
 		}
-	}}
+	}
+}
 
 parcel_monitoring_period_verification = {
-	"hasPersonalEntity": False,  # Creates both regular and 'my' endpoints
-	ENTITY_PARCEL_MONITORING_PERIOD_VERIFICATION: {
+	"entity_name": ENTITY_PARCEL_MONITORING_PERIOD_VERIFICATION,
+	"has_personal_entity": False,
+	"definition": {
 		"description": "Verification of Project Claim",
 		"required": [
 			f"{ENTITY_PARCEL}_id",
@@ -385,20 +393,22 @@ parcel_monitoring_period_verification = {
 				"description": "amount of carbon reduction calculated"
 			}
 		}
-	}}
+	}
+}
 
 project_monitoring_period_verification = {
-	"hasPersonalEntity": False,  # Creates both regular and 'my' endpoints
-	ENTITY_PROJECT_MONITORING_PERIOD_VERIFICATION: {
+	"entity_name": ENTITY_PROJECT_MONITORING_PERIOD_VERIFICATION,
+	"has_personal_entity": False,
+	"definition": {
 		"description": "Verification of Project",
 		"required": [
 			f"{ENTITY_PROJECT}_id"
 		],
 		"properties": {
 			f"{ENTITY_PROJECT}_id": {
-						"type": f"reference:{ENTITY_PROJECT}",
-						"example": "3dece208-c95c-11f0-9041-54e1adfac5b1",
-						"description": "ID of the project verified"
+				"type": f"reference:{ENTITY_PROJECT}",
+				"example": "3dece208-c95c-11f0-9041-54e1adfac5b1",
+				"description": "ID of the project verified"
 			},
 			"status_code": {
 				"type": "string",
@@ -411,7 +421,8 @@ project_monitoring_period_verification = {
 				"description": "further explanation of status code"
 			}
 		}
-	}}
+	}
+}
 
 entities_data = [
 	(ENTITY_PROJECT, project_entity),
@@ -431,7 +442,7 @@ def create_all_entities():
 	for idx, (entity_name, entity) in enumerate(entities_data, 1):
 		try:
 			response = create_system_dynamic_entity(entity, DIRECTLOGIN_TOKEN)
-			entity_id = response.get('dynamicEntityId', 'N/A')
+			entity_id = response.get('dynamic_entity_id', 'N/A')
 			logger.info(f"  ✓ [{idx}/{len(entities_data)}] Created entity: {entity_name} (ID: {entity_id})")
 			created_count += 1
 		except Exception as e:
@@ -457,7 +468,7 @@ def add_entitlement_to_user(token, user_id, role_name, bank_id=""):
 	Returns:
 		Response JSON from the API
 	"""
-	url = f"{BASE_URL}/obp/v5.1.0/users/{user_id}/entitlements"
+	url = f"{BASE_URL}/obp/v6.0.0/users/{user_id}/entitlements"
 	headers = {
 		"Authorization": f"DirectLogin token={token}",
 		"Content-Type": "application/json"

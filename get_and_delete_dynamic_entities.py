@@ -21,7 +21,7 @@ def get_all_system_dynamic_entities(token=None):
 	Returns:
 		dict: The API response
 	"""
-	url = f"{BASE_URL}/obp/v5.1.0/management/system-dynamic-entities"
+	url = f"{BASE_URL}/obp/v6.0.0/management/system-dynamic-entities"
 
 	headers = {
 		"Content-Type": "application/json"
@@ -103,7 +103,7 @@ def delete_object_for_system_dynamic_entity(entity_name, object_id, token=None):
 
 def delete_system_dynamic_entity(entity_id, token=None):
 
-	url = f"{BASE_URL}/obp/v5.1.0/management/system-dynamic-entities/{entity_id}"
+	url = f"{BASE_URL}/obp/v6.0.0/management/system-dynamic-entities/{entity_id}"
 
 	headers = {
 		"Content-Type": "application/json"

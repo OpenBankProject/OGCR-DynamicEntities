@@ -49,7 +49,7 @@ def print_separator(char="=", length=80):
 def main():
 	logger.info("Starting Dynamic Entities Management Script")
 	print_separator()
-	
+
 	# =========================================================================
 	# STEP 1: Delete all entity objects for each dynamic entity
 	# =========================================================================
@@ -114,10 +114,19 @@ def main():
 	except Exception as e:
 		logger.error(f"Failed to retrieve dynamic entities: {e}")
 		return
-	
+
+	# Debug: show all entity names from API
+	logger.info("Entity names from API:")
+	for entity in all_dynamic_entities:
+		keys = list(entity.keys())
+		logger.info(f"  Keys: {keys}")
+
+	# Debug: show what we're looking for
+	logger.info(f"Looking for these entity names: {my_dynamic_entities_names}")
+
 	my_dynamic_entities = [x for x in all_dynamic_entities if list(x.keys())[1] in my_dynamic_entities_names]
 	my_dynamic_entities_ids = [x["dynamicEntityId"] for x in my_dynamic_entities]
-	
+
 	logger.info(f"Found {len(my_dynamic_entities_ids)} matching entities to delete")
 	
 	if not my_dynamic_entities_ids:

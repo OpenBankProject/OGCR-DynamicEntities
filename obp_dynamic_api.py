@@ -72,6 +72,13 @@ def create_dynamic_entity_from_parsed(name, parsed_fields, token=None, base_url=
         else:
             example_value = example
 
+        # If parsed_fields value is a dict, it may contain
+        #   {'value': <type-from-col-D>, 'example': <example-from-col-H>}
+        # We should prefer the declared type from column D if it matches OBP's allowed types.
+        declared_type = None
+        if isinstance(example, dict):
+            declared_type = example.get("value")
+
         # Coerce string example values to appropriate Python types so OBP validation matches
         if isinstance(example_value, str):
             s = example_value.strip()
@@ -101,23 +108,52 @@ def create_dynamic_entity_from_parsed(name, parsed_fields, token=None, base_url=
                 except Exception:
                     example_value = s
 
-        # minimal typing: decide JSON schema type from coerced example_value
+        # Allowed OBP types (from error message); if declared_type is in this set use it,
+        # otherwise default to 'string' as requested.
+        ALLOWED_TYPES = {
+            "number",
+            "integer",
+            "boolean",
+            "string",
+            "DATE_WITH_DAY",
+            "json",
+            "reference:operator",
+            "reference:land_manager",
+            "reference:Bank",
+            "reference:Consumer",
+            "reference:Customer",
+            "reference:MethodRouting",
+            "reference:DynamicEntity",
+            "reference:TransactionRequest",
+            "reference:ProductAttribute",
+            "reference:AccountAttribute",
+            "reference:TransactionAttribute",
+            "reference:CustomerAttribute",
+            "reference:AccountApplication",
+            "reference:CardAttribute",
+            "reference:Counterparty",
+            "reference:Branch:bankId&branchId",
+            "reference:Atm:bankId&atmId",
+            "reference:BankAccount:bankId&accountId",
+            "reference:Product:bankId&productCode",
+            "reference:PhysicalCard:bankId&cardId",
+            "reference:Transaction:bankId&accountId&transactionId",
+            "reference:Counterparty:bankId&accountId&counterpartyId",
+        }
+
         prop_type = "string"
-        try:
-            if isinstance(example_value, int):
-                prop_type = "integer"
-            elif isinstance(example_value, float):
-                prop_type = "number"
-            elif isinstance(example_value, list):
-                prop_type = "array"
-            elif isinstance(example_value, dict):
-                prop_type = "object"
-            elif isinstance(example_value, bool):
-                prop_type = "boolean"
-            else:
-                prop_type = "string"
-        except Exception:
+        if isinstance(declared_type, str) and declared_type in ALLOWED_TYPES:
+            prop_type = declared_type
+        else:
             prop_type = "string"
+
+        # If the final prop_type is string, ensure the example value is a string
+        if prop_type == "string" and example_value is not None:
+            try:
+                example_value = str(example_value)
+            except Exception:
+                # fallback to a sensible default
+                example_value = ""
 
         # Ensure an example exists for each property (OBP requires example for some validations)
         prop_def = {"type": prop_type}

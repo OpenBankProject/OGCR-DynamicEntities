@@ -133,3 +133,7 @@ dmypy.json
 
 # internal stuff
 internal/*
+all_dynamic_entities_data.json
+
+# libreoffice
+.~lock.*

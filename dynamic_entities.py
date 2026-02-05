@@ -86,13 +86,141 @@ project_entity = {
 	ENTITY_PROJECT: {
 		"description": "a carbon credit project",
 		"required": [
-			"project_owner"
+			"project_name",
+			"project_operator_name"
 		],
 		"properties": {
-			"project_owner": {
+			"project_operator_name": {
 				"type": "string",
-				"example": "hugo muller passport nr. 1234444",
-				"description": "legal identifier of landholder"
+				"example": "Hugo Muller",
+				"description": "Name of the project operator / entity managing the project"
+			},
+			"project_operator_email": {
+				"type": "string",
+				"example": "hugo@example.com",
+				"description": "Contact email for the project operator"
+			},
+			"project_operator_phone": {
+				"type": "string",
+				"example": "+49 151 1234567",
+				"description": "Contact phone number for the project operator"
+			},
+			"project_operator_address_line_1": {
+				"type": "string",
+				"example": "Musterstrasse 1",
+				"description": "Operator address line 1"
+			},
+			"project_operator_address_line_2": {
+				"type": "string",
+				"example": "Suite 42",
+				"description": "Operator address line 2 (optional)"
+			},
+			"project_operator_postcode": {
+				"type": "string",
+				"example": "10115",
+				"description": "Operator postal code"
+			},
+			"project_operator_country": {
+				"type": "string",
+				"example": "Germany",
+				"description": "Operator country"
+			},
+			"project_name": {
+				"type": "string",
+				"example": "Example Carbon Project",
+				"description": "Readable name of the project"
+			},
+			"project_summary": {
+				"type": "string",
+				"example": "Smallholder agroforestry restoration on degraded land",
+				"description": "Short summary of the project"
+			},
+			"project_description": {
+				"type": "string",
+				"example": "A longer description with objectives, scope and impact",
+				"description": "Detailed description of the project"
+			},
+			"project_website": {
+				"type": "string",
+				"example": "https://example.org/project",
+				"description": "Optional website URL for the project"
+			},
+			"project_image": {
+				"type": "string",
+				"example": "https://example.org/image.jpg",
+				"description": "URL to a representative image for the project"
+			},
+			"project_media_links": {
+				"type": "array",
+				"items": { "type": "string" },
+				"example": ["https://example.org/video.mp4", "https://example.org/doc.pdf"],
+				"description": "List of media links (videos, documents, etc.)"
+			},
+			"project_activity_type": {
+				"type": "string",
+				"example": "Agroforestry",
+				"description": "High level activity type for the project"
+			},
+			"project_type": {
+				"type": "string",
+				"example": "Reforestation",
+				"description": "Project classification / type"
+			},
+			"project_city": {
+				"type": "string",
+				"example": "Berlin",
+				"description": "City where the project is located (if applicable)"
+			},
+			"project_country": {
+				"type": "string",
+				"example": "Germany",
+				"description": "Country where the project is located"
+			},
+			"project_cobenefits": {
+				"type": "array",
+				"items": { "type": "string" },
+				"example": ["biodiversity", "water retention"],
+				"description": "List of co-benefits produced by the project"
+			},
+			"project_activity_plan": {
+				"type": "string",
+				"example": "Planned activities and schedule",
+				"description": "Narrative or link describing the activity plan"
+			},
+			"project_start_date": {
+				"type": "string",
+				"example": "2024-01-01",
+				"description": "Project start date (ISO 8601)"
+			},
+			"project_end_date": {
+				"type": "string",
+				"example": "2034-12-31",
+				"description": "Project end date (ISO 8601)"
+			},
+			"project_term_commitment": {
+				"type": "integer",
+				"example": 10,
+				"description": "Term commitment (years)"
+			},
+			"project_methodology": {
+				"type": "string",
+				"example": "Methodology name or reference",
+				"description": "Methodology applied for carbon accounting"
+			},
+			"monitoring_period_years": {
+				"type": "integer",
+				"example": 5,
+				"description": "Number of years per monitoring period"
+			},
+			"monitoring_period_start_date": {
+				"type": "string",
+				"example": "2024-01-01",
+				"description": "Monitoring period start date (ISO 8601)"
+			},
+			"monitoring_period_end_date": {
+				"type": "string",
+				"example": "2029-12-31",
+				"description": "Monitoring period end date (ISO 8601)"
 			}
 		}
 	},
@@ -346,3 +474,5 @@ def add_entitlement_to_user(token, user_id, role_name, bank_id=""):
 		logger.error(f"Error adding entitlement to user: {e}")
 	print(response)
 	return response.json()
+
+

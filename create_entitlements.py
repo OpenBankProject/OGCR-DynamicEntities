@@ -2,7 +2,7 @@ from dynamic_entities import entities_data, add_entitlement_to_user
 from obp_client import token
 
 #TODO: call get current_user
-user_id = "add_your_user_id_here"
+user_id = "9e564728-48fc-4ce4-97ae-417889746959"
 meta_role_names = [
 	"CanCreateSystemLevelDynamicEntity",
 	"CanDeleteSystemLevelDynamicEntity",

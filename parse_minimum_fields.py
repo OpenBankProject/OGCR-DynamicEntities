@@ -1,0 +1,227 @@
+#!/usr/bin/env python3
+"""
+Script to parse xlsx file and extract entity dictionaries.
+Reads column A until 'END_OF_FILE', creates dictionaries for each entity
+with column A as keys and column D as values.
+"""
+
+import pandas as pd
+import sys
+from pathlib import Path
+from obp_dynamic_api import create_dynamic_entity_from_parsed
+import argparse
+import os
+
+
+def _has_green_checkmark(cell_value):
+	"""
+	Check if a cell contains a green checkmark.
+
+	Args:
+		cell_value (str): The cell value to check
+
+	Returns:
+		bool: True if cell contains a green checkmark
+	"""
+	if not cell_value:
+		return False
+
+	# Common representations of green checkmarks
+	checkmarks = ['✓', '✔', '✅', '☑', '√', 'YES', 'Y', 'TRUE', '1']
+	cell_upper = cell_value.upper().strip()
+
+	return any(mark in cell_upper for mark in checkmarks)
+
+
+def parse_xlsx_entities(file_path):
+	"""
+	Parse xlsx file to extract entity dictionaries.
+
+	Args:
+		file_path (str): Path to the xlsx file
+
+	Returns:
+		dict: Dictionary containing all entity dictionaries
+	"""
+	try:
+		# Read the xlsx file
+		df = pd.read_excel(file_path, engine='openpyxl')
+
+		# Initialize variables
+		entities = {}
+		current_entity = None
+		current_dict = {}
+
+		# Iterate through rows
+		for index, row in df.iterrows():
+			# Get values from columns A, B, C, and D (0-indexed: A=0, B=1, C=2, D=3)
+			col_a_value = row.iloc[0] if pd.notna(row.iloc[0]) else ""
+			col_b_value = row.iloc[1] if len(row) > 1 and pd.notna(row.iloc[1]) else ""
+			col_c_value = row.iloc[2] if len(row) > 2 and pd.notna(row.iloc[2]) else ""
+			col_d_value = row.iloc[3] if len(row) > 3 and pd.notna(row.iloc[3]) else ""
+			# Column H (0-indexed: 7) will be used as the example value for attributes
+			col_h_value = row.iloc[7] if len(row) > 7 and pd.notna(row.iloc[7]) else ""
+
+			# Convert to string for processing
+			col_a_str = str(col_a_value).strip()
+			col_b_str = str(col_b_value).strip()
+			col_c_str = str(col_c_value).strip()
+			col_d_str = str(col_d_value).strip()
+			col_h_str = str(col_h_value).strip()
+
+			# Clean example string: remove surrounding double or single quotes if present
+			cleaned_example = col_h_str
+			if len(cleaned_example) >= 2:
+				if (cleaned_example.startswith('"') and cleaned_example.endswith('"')) or (
+					cleaned_example.startswith("'") and cleaned_example.endswith("'")
+				):
+					cleaned_example = cleaned_example[1:-1].strip()
+
+			# Check for stop marker
+			if col_a_str == "END_OF_FILE":
+				# Save current entity if exists
+				if current_entity and current_dict:
+					entities[current_entity] = current_dict
+				break
+
+			# Check if this row starts a new entity
+			if col_a_str.lower().startswith("entity:"):
+				# Save previous entity if exists
+				if current_entity and current_dict:
+					entities[current_entity] = current_dict
+
+				# Start new entity
+				entity_name = col_a_str[7:].strip()  # Remove "entity:" prefix
+				current_entity = entity_name
+				current_dict = {}
+
+			elif current_entity:
+				# Add to current entity dictionary if we have a valid key
+				if col_a_str and col_a_str != "nan":
+					# sanitize field name: replace dots with underscore to satisfy allowed chars
+					# sanitize field name: only allow A-Z a-z 0-9 underscore and hyphen
+					# replace any other character with underscore, collapse repeated underscores
+					import re
+					safe_key_raw = col_a_str.replace('.', '_')
+					safe_key = re.sub(r'[^A-Za-z0-9_\-]', '_', safe_key_raw)
+					# collapse multiple underscores
+					safe_key = re.sub(r'_+', '_', safe_key).strip('_')
+					# Check for green check marks in columns B and C
+					has_green_check_b = _has_green_checkmark(col_b_str)
+					has_green_check_c = _has_green_checkmark(col_c_str)
+
+					if has_green_check_b:
+						# Column B has green check - add normally; preserve column D as value
+						# and attach column H as explicit example when available
+						if cleaned_example:
+							current_dict[safe_key] = {"value": col_d_str, "example": cleaned_example}
+						else:
+							current_dict[safe_key] = {"value": col_d_str}
+					elif has_green_check_c:
+						# Column C has green check but not B - mark as optional
+						opt_key = f"{safe_key} (optional)"
+						if cleaned_example:
+							current_dict[opt_key] = {"value": col_d_str, "example": cleaned_example}
+						else:
+							current_dict[opt_key] = {"value": col_d_str}
+				# If neither B nor C has green check, skip this row
+
+		# Save the last entity if exists
+		if current_entity and current_dict:
+			entities[current_entity] = current_dict
+
+		return entities
+
+	except FileNotFoundError:
+		print(f"Error: File '{file_path}' not found.")
+		return {}
+	except Exception as e:
+		print(f"Error reading file: {e}")
+		return {}
+
+
+def main():
+	"""Main function to run the parser."""
+	parser = argparse.ArgumentParser(description="Parse minimal field matrix and optionally create dynamic entities on OBP")
+	parser.add_argument("file", nargs="?", default="min_field_matrix.xlsx", help="Path to the xlsx file")
+	parser.add_argument("--create", action="store_true", help="Create parsed entities on OBP (will call management API)")
+	parser.add_argument("--token", default=None, help="DirectLogin token to use (overrides obp_client.token)")
+	parser.add_argument("--host", default=None, help="OBP host to use (overrides obp_client.obp_host)")
+	parser.add_argument("--yes", action="store_true", help="If set with --create, skip confirmation prompt")
+	args = parser.parse_args()
+	file_path = args.file
+
+	# Check if file exists
+	if not Path(file_path).exists():
+		print(f"File '{file_path}' does not exist.")
+		return
+
+	print(f"Parsing file: {file_path}")
+	entities = parse_xlsx_entities(file_path)
+
+	if not entities:
+		print("No entities found or error occurred.")
+		return
+
+	# Display results
+	print(f"\nFound {len(entities)} entities:")
+	print("=" * 50)
+
+	for entity_name, entity_dict in entities.items():
+		print(f"\nEntity: {entity_name}")
+		print("-" * 30)
+		if entity_dict:
+			for key, value in entity_dict.items():
+				print(f"  {key}: {value}")
+		else:
+			print("  (No data)")
+
+	# Optionally create entities on OBP management API
+	if args.create:
+		print("--create flag provided: will attempt to create parsed entities on OBP")
+		if not args.yes:
+			confirm = input("Proceed to create entities on OBP? Type 'yes' to continue: ")
+			if confirm.strip().lower() != "yes":
+				print("Aborted by user.")
+				return
+
+		# iterate and call API
+		for entity_name, entity_dict in entities.items():
+			print(f"Creating entity: {entity_name} ...")
+			try:
+				resp = create_dynamic_entity_from_parsed(entity_name, entity_dict, token=args.token, base_url=args.host)
+				print(f"Created: {resp.get('dynamicEntityId', '<no-id>')}")
+			except Exception as e:
+				print(f"Failed to create entity {entity_name}: {e}")
+		# end create loop
+		return
+
+	# If not creating, offer to save to file
+	save_option = input("\nSave results to a file? (y/n): ").lower().strip()
+	if save_option in ['y', 'yes']:
+		output_file = input("Enter output filename (default: entities_output.txt): ").strip()
+		if not output_file:
+			output_file = "entities_output.txt"
+
+		try:
+			with open(output_file, 'w', encoding='utf-8') as f:
+				f.write(f"Parsed entities from: {file_path}\n")
+				f.write("=" * 50 + "\n\n")
+
+				for entity_name, entity_dict in entities.items():
+					f.write(f"Entity: {entity_name}\n")
+					f.write("-" * 30 + "\n")
+					if entity_dict:
+						for key, value in entity_dict.items():
+							f.write(f"  {key}: {value}\n")
+					else:
+						f.write("  (No data)\n")
+					f.write("\n")
+
+			print(f"Results saved to: {output_file}")
+		except Exception as e:
+			print(f"Error saving file: {e}")
+
+
+if __name__ == "__main__":
+	main()

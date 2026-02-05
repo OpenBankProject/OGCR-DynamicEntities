@@ -25,6 +25,37 @@ def print_separator(char="=", length=80):
     logger.info(char * length)
 
 
+def _extract_entity_name_and_id(entity):
+    """Return (entity_name, entity_id) from a dynamic entity listing entry.
+
+    The API may return several keys; this helper ignores common control keys and
+    picks the remaining key as the entity name. It also tolerates legacy/internal
+    shapes that include an 'entity_name' key.
+    """
+    control_keys = {"hasPersonalEntity", "has_personal_entity", "dynamicEntityId", "dynamic_entity_id", "userId", "user_id"}
+    # Find candidate keys that are not control/meta keys
+    candidates = [k for k in entity.keys() if k not in control_keys]
+    # Default id lookup
+    entity_id = entity.get("dynamicEntityId") or entity.get("dynamic_entity_id") or "N/A"
+    if not candidates:
+        return ("<unknown>", entity_id)
+
+    # If a candidate key is the literal 'entity_name', try to read its value
+    if candidates[0] == "entity_name":
+        val = entity.get("entity_name")
+        if isinstance(val, str):
+            return (val, entity_id)
+        if isinstance(val, dict):
+            inner = [k for k in val.keys() if k not in control_keys]
+            if inner:
+                return (inner[0], entity_id)
+        # Fallback to the literal key name
+        return ("entity_name", entity_id)
+
+    # Otherwise return the first non-control key (this is usually the real entity name)
+    return (candidates[0], entity_id)
+
+
 def main():
     logger.info("Starting Delete ALL Dynamic Entities Script")
     logger.warning("⚠️  WARNING: This will delete ALL system dynamic entities!")
@@ -52,8 +83,7 @@ def main():
     # Log all entity names
     logger.info("Dynamic entities to be deleted:")
     for idx, entity in enumerate(all_dynamic_entities, 1):
-        entity_name = list(entity.keys())[1]  # Second key is the entity name
-        entity_id = entity.get("dynamicEntityId", "N/A")
+        entity_name, entity_id = _extract_entity_name_and_id(entity)
         logger.info(f"  [{idx}] {entity_name} (ID: {entity_id})")
     
     print_separator()
@@ -68,7 +98,7 @@ def main():
     total_objects_failed = 0
     
     for idx, entity in enumerate(all_dynamic_entities, 1):
-        entity_name = list(entity.keys())[1]  # Second key is the entity name
+        entity_name, _ = _extract_entity_name_and_id(entity)
         logger.info(f"[{idx}/{len(all_dynamic_entities)}] Processing entity: {entity_name}")
         
         try:
@@ -115,10 +145,14 @@ def main():
     total_entities_failed = 0
     
     for idx, entity in enumerate(all_dynamic_entities, 1):
-        entity_name = list(entity.keys())[1]  # Second key is the entity name
-        entity_id = entity["dynamicEntityId"]
-        
+        entity_name, entity_id = _extract_entity_name_and_id(entity)
+
         try:
+            if entity_id == "N/A":
+                logger.error(f"  ✗ [{idx}/{len(all_dynamic_entities)}] Missing entity id for {entity_name}, skipping")
+                total_entities_failed += 1
+                continue
+
             delete_system_dynamic_entity(entity_id, token=DIRECTLOGIN_TOKEN)
             logger.info(f"  ✓ [{idx}/{len(all_dynamic_entities)}] Deleted entity: {entity_name} (ID: {entity_id})")
             total_entities_deleted += 1

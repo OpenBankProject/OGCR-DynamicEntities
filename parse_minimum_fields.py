@@ -11,6 +11,7 @@ from pathlib import Path
 from obp_dynamic_api import create_dynamic_entity_from_parsed
 import argparse
 import os
+import datetime
 
 
 def _has_green_checkmark(cell_value):
@@ -62,12 +63,22 @@ def parse_xlsx_entities(file_path):
 			# Column H (0-indexed: 7) will be used as the example value for attributes
 			col_h_value = row.iloc[7] if len(row) > 7 and pd.notna(row.iloc[7]) else ""
 
-			# Convert to string for processing
+			# Convert to string for processing (handle Excel dates safely)
 			col_a_str = str(col_a_value).strip()
 			col_b_str = str(col_b_value).strip()
 			col_c_str = str(col_c_value).strip()
 			col_d_str = str(col_d_value).strip()
-			col_h_str = str(col_h_value).strip()
+			# If pandas read a datetime/timestamp, format as YYYY-MM-DD to match DATE_WITH_DAY
+			if col_h_value == "" or pd.isna(col_h_value):
+				col_h_str = ""
+			else:
+				if isinstance(col_h_value, (pd.Timestamp, datetime.datetime, datetime.date)):
+					try:
+						col_h_str = col_h_value.strftime("%Y-%m-%d")
+					except Exception:
+						col_h_str = str(col_h_value).strip()
+				else:
+					col_h_str = str(col_h_value).strip()
 
 			# Clean example string: remove surrounding double or single quotes if present
 			cleaned_example = col_h_str

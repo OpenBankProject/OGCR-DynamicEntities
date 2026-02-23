@@ -49,12 +49,46 @@ def create_system_dynamic_entity(entity_definition, token=None, base_url=None):
     return resp.json()
 
 
-def create_dynamic_entity_from_parsed(name, parsed_fields, token=None, base_url=None, has_personal=False):
-    """Build a minimal dynamic-entity payload from parsed_fields and call the create API.
+def update_system_dynamic_entity(dynamic_entity_id, entity_definition, token=None, base_url=None):
+    """PUT the given entity_definition to update an existing system dynamic entity.
 
-    parsed_fields: dict mapping field_name or "field_name (optional)" -> example_value
+    Returns the response JSON on success; raises requests.exceptions.RequestException on failure.
     """
-    # Normalize field names and determine required fields
+    token = token or DEFAULT_TOKEN
+    base_url = base_url or DEFAULT_HOST
+    url = f"{base_url}/obp/v5.1.0/management/system-dynamic-entities/{dynamic_entity_id}"
+
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"DirectLogin token={token}"
+
+    logger.debug("Updating system dynamic entity %s: %s", dynamic_entity_id, json.dumps(entity_definition, indent=2))
+
+    resp = requests.put(url, headers=headers, json=entity_definition)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def get_dynamic_entity_id_by_name(name, token=None, base_url=None):
+    """Return dynamicEntityId for a system dynamic entity matching `name` or None if not found."""
+    token = token or DEFAULT_TOKEN
+    base_url = base_url or DEFAULT_HOST
+    try:
+        existing = list_system_dynamic_entities(token=token, base_url=base_url)
+        for e in existing.get("dynamic_entities", []):
+            keys = [k for k in e.keys() if k not in ("hasPersonalEntity", "dynamicEntityId", "userId")]
+            if name in keys:
+                return e.get("dynamicEntityId")
+    except Exception:
+        return None
+    return None
+
+
+def build_entity_definition_from_parsed(name, parsed_fields, has_personal=False, has_community=False, entity_description=None):
+    """Build and return a dynamic-entity payload dict from parsed_fields without making API calls.
+
+    parsed_fields: dict mapping field_name or "field_name (optional)" -> {'value':<type>, 'example':<example>, 'description':<desc>} or scalar
+    """
     properties = {}
     required = []
     for raw_key, example in parsed_fields.items():
@@ -63,53 +97,40 @@ def create_dynamic_entity_from_parsed(name, parsed_fields, token=None, base_url=
         if key.endswith(" (optional)"):
             key = key[:-11]
             optional = True
-        # Support parsed_fields values that are either a scalar example or a dict
-        # containing {'value': <col D value>, 'example': <col H value>}.
+
         example_value = None
-        # If example is a dict, prefer its 'example' entry, fall back to 'value'
         if isinstance(example, dict):
             example_value = example.get("example") if example.get("example") is not None else example.get("value")
         else:
             example_value = example
 
-        # If parsed_fields value is a dict, it may contain
-        #   {'value': <type-from-col-D>, 'example': <example-from-col-H>}
-        # We should prefer the declared type from column D if it matches OBP's allowed types.
         declared_type = None
         if isinstance(example, dict):
             declared_type = example.get("value")
 
-        # Coerce string example values to appropriate Python types so OBP validation matches
         if isinstance(example_value, str):
             s = example_value.strip()
-            # remove surrounding quotes if present
             if len(s) >= 2 and ((s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'"))):
                 s = s[1:-1].strip()
-            # integer
             if re.fullmatch(r"-?\d+", s):
                 try:
                     example_value = int(s)
                 except Exception:
                     pass
-            # float
             elif re.fullmatch(r"-?\d+\.\d+", s):
                 try:
                     example_value = float(s)
                 except Exception:
                     pass
-            # boolean
             elif s.lower() in ("true", "false"):
                 example_value = s.lower() == "true"
             else:
-                # try JSON for arrays/objects
                 try:
                     parsed = json.loads(s)
                     example_value = parsed
                 except Exception:
                     example_value = s
 
-        # Allowed OBP types (from error message); if declared_type is in this set use it,
-        # otherwise default to 'string' as requested.
         ALLOWED_TYPES = {
             "number",
             "integer",
@@ -160,20 +181,16 @@ def create_dynamic_entity_from_parsed(name, parsed_fields, token=None, base_url=
         else:
             prop_type = "string"
 
-        # If the final prop_type is string, ensure the example value is a string
         if prop_type == "string" and example_value is not None:
             try:
                 example_value = str(example_value)
             except Exception:
-                # fallback to a sensible default
                 example_value = ""
 
-        # Ensure an example exists for each property (OBP requires example for some validations)
         prop_def = {"type": prop_type}
         if example_value is not None and example_value != "":
             prop_def["example"] = example_value
         else:
-            # provide a reasonable default example based on type
             if prop_type == "integer":
                 prop_def["example"] = 1
             elif prop_type in ("number",):
@@ -182,23 +199,38 @@ def create_dynamic_entity_from_parsed(name, parsed_fields, token=None, base_url=
                 prop_def["example"] = []
             else:
                 prop_def["example"] = "string"
+
+        if isinstance(example, dict) and example.get("description"):
+            try:
+                prop_def["description"] = str(example.get("description"))
+            except Exception:
+                prop_def["description"] = ""
+
         properties[key] = prop_def
         if not optional:
             required.append(key)
 
+    entity_def_description = entity_description if entity_description is not None else f"Parsed entity {name}"
     entity_definition = {
         "hasPersonalEntity": bool(has_personal),
+        "hasCommunityAccess": bool(has_community),
         name: {
-            "description": f"Parsed entity {name}",
+            "description": entity_def_description,
             "required": required,
             "properties": properties,
         }
     }
+    return entity_definition
+
+
+def create_dynamic_entity_from_parsed(name, parsed_fields, token=None, base_url=None, has_personal=False, has_community=False, entity_description=None):
+    """Create a dynamic entity using parsed fields by building the payload and POSTing it."""
+    entity_definition = build_entity_definition_from_parsed(name, parsed_fields, has_personal=has_personal, has_community=has_community, entity_description=entity_description)
+
     # If entity with same name already exists, return existing id instead of creating
     try:
         existing = list_system_dynamic_entities(token=token, base_url=base_url)
         for e in existing.get("dynamic_entities", []):
-            # find the wrapper key (skip control keys)
             keys = [k for k in e.keys() if k not in ("hasPersonalEntity", "dynamicEntityId", "userId")]
             if name in keys:
                 return {"dynamicEntityId": e.get("dynamicEntityId"), "existing": True}
@@ -206,5 +238,4 @@ def create_dynamic_entity_from_parsed(name, parsed_fields, token=None, base_url=
         # listing failed - continue and attempt create
         pass
 
-    # Call the API to create
     return create_system_dynamic_entity(entity_definition, token=token, base_url=base_url)

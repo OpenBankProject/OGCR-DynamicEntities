@@ -60,7 +60,8 @@ def parse_xlsx_entities(file_path):
 			col_b_value = row.iloc[1] if len(row) > 1 and pd.notna(row.iloc[1]) else ""
 			col_c_value = row.iloc[2] if len(row) > 2 and pd.notna(row.iloc[2]) else ""
 			col_d_value = row.iloc[3] if len(row) > 3 and pd.notna(row.iloc[3]) else ""
-			# Column H (0-indexed: 7) will be used as the example value for attributes
+			# Column G (index 6) holds descriptions; Column H (index 7) holds examples
+			col_g_value = row.iloc[6] if len(row) > 6 and pd.notna(row.iloc[6]) else ""
 			col_h_value = row.iloc[7] if len(row) > 7 and pd.notna(row.iloc[7]) else ""
 
 			# Convert to string for processing (handle Excel dates safely)
@@ -68,6 +69,7 @@ def parse_xlsx_entities(file_path):
 			col_b_str = str(col_b_value).strip()
 			col_c_str = str(col_c_value).strip()
 			col_d_str = str(col_d_value).strip()
+			col_g_str = str(col_g_value).strip()
 			# If pandas read a datetime/timestamp, format as YYYY-MM-DD to match DATE_WITH_DAY
 			if col_h_value == "" or pd.isna(col_h_value):
 				col_h_str = ""
@@ -99,12 +101,14 @@ def parse_xlsx_entities(file_path):
 			if col_a_str.lower().startswith("entity:"):
 				# Save previous entity if exists
 				if current_entity and current_dict:
-					entities[current_entity] = current_dict
+					entities[current_entity] = {"description": current_entity_description, "fields": current_dict}
 
 				# Start new entity
 				entity_name = col_a_str[7:].strip()  # Remove "entity:" prefix
 				current_entity = entity_name
 				current_dict = {}
+				# capture entity-level description from column G when present
+				current_entity_description = col_g_str if col_g_str else f"Parsed entity {entity_name}"
 
 			elif current_entity:
 				# Add to current entity dictionary if we have a valid key
@@ -124,22 +128,26 @@ def parse_xlsx_entities(file_path):
 					if has_green_check_b:
 						# Column B has green check - add normally; preserve column D as value
 						# and attach column H as explicit example when available
+						entry = {"value": col_d_str}
 						if cleaned_example:
-							current_dict[safe_key] = {"value": col_d_str, "example": cleaned_example}
-						else:
-							current_dict[safe_key] = {"value": col_d_str}
+							entry["example"] = cleaned_example
+						if col_g_str:
+							entry["description"] = col_g_str
+						current_dict[safe_key] = entry
 					elif has_green_check_c:
 						# Column C has green check but not B - mark as optional
 						opt_key = f"{safe_key} (optional)"
+						entry = {"value": col_d_str}
 						if cleaned_example:
-							current_dict[opt_key] = {"value": col_d_str, "example": cleaned_example}
-						else:
-							current_dict[opt_key] = {"value": col_d_str}
+							entry["example"] = cleaned_example
+						if col_g_str:
+							entry["description"] = col_g_str
+						current_dict[opt_key] = entry
 				# If neither B nor C has green check, skip this row
 
 		# Save the last entity if exists
 		if current_entity and current_dict:
-			entities[current_entity] = current_dict
+			entities[current_entity] = {"description": current_entity_description, "fields": current_dict}
 
 		return entities
 
@@ -156,11 +164,24 @@ def main():
 	parser = argparse.ArgumentParser(description="Parse minimal field matrix and optionally create dynamic entities on OBP")
 	parser.add_argument("file", nargs="?", default="min_field_matrix.xlsx", help="Path to the xlsx file")
 	parser.add_argument("--create", action="store_true", help="Create parsed entities on OBP (will call management API)")
+	parser.add_argument("--update", action="store_true", help="Update existing parsed entities on OBP (will call management API)")
 	parser.add_argument("--token", default=None, help="DirectLogin token to use (overrides obp_client.token)")
 	parser.add_argument("--host", default=None, help="OBP host to use (overrides obp_client.obp_host)")
 	parser.add_argument("--yes", action="store_true", help="If set with --create, skip confirmation prompt")
 	args = parser.parse_args()
 	file_path = args.file
+
+	# Read access flags from environment (.env or system env)
+	def _env_to_bool(val):
+		if val is None:
+			return False
+		if isinstance(val, bool):
+			return val
+		s = str(val).strip().lower()
+		return s in ("1", "true", "yes", "y", "on")
+
+	has_personal = _env_to_bool(os.getenv("HAS_PERSONAL_ENTITY"))
+	has_community = _env_to_bool(os.getenv("HAS_COMMUNITY_ACCESS"))
 
 	# Check if file exists
 	if not Path(file_path).exists():
@@ -187,23 +208,51 @@ def main():
 		else:
 			print("  (No data)")
 
-	# Optionally create entities on OBP management API
-	if args.create:
+	# Optionally create or update entities on OBP management API
+	if args.create and args.update:
+		print("Cannot use --create and --update together. Choose one.")
+		return
+
+	if args.create or args.update:
 		print("--create flag provided: will attempt to create parsed entities on OBP")
+		if args.update:
+			print("--update flag provided: will attempt to update existing parsed entities on OBP")
 		if not args.yes:
 			confirm = input("Proceed to create entities on OBP? Type 'yes' to continue: ")
 			if confirm.strip().lower() != "yes":
 				print("Aborted by user.")
 				return
 
-		# iterate and call API
-		for entity_name, entity_dict in entities.items():
-			print(f"Creating entity: {entity_name} ...")
+		# iterate and call API (create or update)
+		for entity_name, entity_wrapper in entities.items():
+			print(f"Processing entity: {entity_name} ...")
 			try:
-				resp = create_dynamic_entity_from_parsed(entity_name, entity_dict, token=args.token, base_url=args.host)
-				print(f"Created: {resp.get('dynamicEntityId', '<no-id>')}")
+				entity_description = entity_wrapper.get("description") if isinstance(entity_wrapper, dict) else None
+				fields = entity_wrapper.get("fields") if isinstance(entity_wrapper, dict) else entity_wrapper
+				if args.create:
+					resp = create_dynamic_entity_from_parsed(
+						entity_name,
+						fields,
+						token=args.token,
+						base_url=args.host,
+						has_personal=has_personal,
+						has_community=has_community,
+						entity_description=entity_description,
+					)
+					print(f"Created: {resp.get('dynamicEntityId', '<no-id>')}")
+				elif args.update:
+					# find existing dynamicEntityId by name
+					from obp_dynamic_api import get_dynamic_entity_id_by_name, build_entity_definition_from_parsed, update_system_dynamic_entity
+					dynamic_id = get_dynamic_entity_id_by_name(entity_name, token=args.token, base_url=args.host)
+					if not dynamic_id:
+						print(f"No existing dynamic entity found for '{entity_name}', skipping update.")
+						continue
+					# build definition and call update
+					entity_def = build_entity_definition_from_parsed(entity_name, fields, entity_description=entity_description)
+					resp = update_system_dynamic_entity(dynamic_id, entity_def, token=args.token, base_url=args.host)
+					print(f"Updated: {resp.get('dynamicEntityId', dynamic_id)}")
 			except Exception as e:
-				print(f"Failed to create entity {entity_name}: {e}")
+				print(f"Failed to process entity {entity_name}: {e}")
 		# end create loop
 		return
 

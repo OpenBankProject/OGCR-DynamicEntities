@@ -5,3 +5,11 @@ OBP_CONSUMER_KEY=myconsumerkey
 OBP_LOG_LEVEL=INFO
 # Optional parameters
 OBP_ENTITY_PREFIX=""
+
+# Controls whether created/updated dynamic entities expose per-user records
+# Set to true/1/yes to enable
+HAS_PERSONAL_ENTITY=false
+
+# Controls whether created/updated dynamic entities grant community access
+# Set to true/1/yes to enable
+HAS_COMMUNITY_ACCESS=false

@@ -180,8 +180,8 @@ def main():
 		s = str(val).strip().lower()
 		return s in ("1", "true", "yes", "y", "on")
 
-	has_personal = _env_to_bool(os.getenv("HAS_PERSONAL_ENTITY"))
-	has_community = _env_to_bool(os.getenv("HAS_COMMUNITY_ACCESS"))
+	has_personal = _env_to_bool(os.getenv("HAS_PERSONAL_ENTITY", "false"))
+	has_community = _env_to_bool(os.getenv("HAS_COMMUNITY_ACCESS", "false"))
 
 	# Check if file exists
 	if not Path(file_path).exists():

@@ -1,418 +1,221 @@
-import logging
-import random
-import requests
-import time
-from dotenv import load_dotenv
-from obp_client import token, obp_host
-from dynamic_entities import (
-    ENTITY_PROJECT,
-    ENTITY_PARCEL,
-    ENTITY_PARCEL_OWNERSHIP_VERIFICATION,
-    ENTITY_PROJECT_PARCEL_VERIFICATION,
-    ENTITY_PROJECT_VERIFICATION,
-    ENTITY_PARCEL_MONITORING_PERIOD_VERIFICATION,
-    ENTITY_PROJECT_MONITORING_PERIOD_VERIFICATION,
-    get_response_key,
-    get_id_key
-)
+"""Create one dummy object per OGCR dynamic entity, driven by the spreadsheet.
 
-# Configure logging with better formatting
+Field values are taken from the spreadsheet `example` column (option 2), while
+foreign-key fields are overwritten with the real id of the referenced object so
+the dummy data is referentially consistent (option 1).
+
+How it works:
+  1. Parse the spreadsheet (`parse_xlsx_entities`) to get each entity's fields,
+     declared types and example values.
+  2. Pre-compute a canonical id for every entity that owns a `<entity>_id` field
+     (taken from that field's example). Because all *_id fields are plain
+     strings (OBP does not enforce referential integrity here), these ids can be
+     assigned up front and reused as foreign keys regardless of creation order.
+  3. For each entity, build a payload from the example values, then override:
+       - its own `<entity>_id`        -> the canonical id for this entity
+       - any `<other_entity>_id` field -> the canonical id of that other entity
+       - `compliance_certificate_id`   -> certificate_of_compliance's id (alias)
+  4. POST one object per entity.
+
+Usage:
+    python3 create_dummy_data.py [path/to/min_field_matrix.xlsx] [--token TOKEN]
+"""
+
+import argparse
+import json
+import logging
+import re
+
+import requests
+
+from obp_client import token as default_token, obp_host
+from parse_minimum_fields import parse_xlsx_entities
+
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s | %(levelname)-8s | %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    format="%(asctime)s | %(levelname)-8s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
 
-# Configuration
 BASE_URL = obp_host
-DIRECTLOGIN_TOKEN = token
-load_dotenv()
+DEFAULT_SPREADSHEET = "min_field_matrix.xlsx"
+
+# Types OBP treats as non-string; anything else falls back to string.
+NON_STRING_TYPES = {"integer", "number", "boolean", "json", "DATE_WITH_DAY"}
+
+# Foreign-key field names that do not follow the `<entity>_id` convention.
+FK_ALIASES = {
+    "compliance_certificate_id": "certificate_of_compliance",
+}
+
+# Nice-to-have creation order (parents first). Any entity not listed is appended
+# in spreadsheet order. Order is cosmetic only - ids are pre-computed.
+PREFERRED_ORDER = [
+    "operator",
+    "land_manager",
+    "parcel",
+    "certification_scheme",
+    "certification_body",
+    "monitoring_plan",
+    "activity",
+    "activity_plan",
+    "certificate_of_compliance",
+    "parcel_owner_verification",
+    "activity_verification",
+    "activity_parcel_verification",
+    "parcel_monitoring_period_verification",
+    "activity_monitoring_period_verification",
+    "audit_report",
+]
 
 
 def print_separator(char="=", length=80):
-    """Print a separator line for better visual separation"""
     logger.info(char * length)
 
 
-def create_dynamic_entity_object(entity_name, data, token=None):
-    """
-    Create an object for a dynamic entity.
+def clean_key(raw_key):
+    """Strip the ' (optional)' suffix used to mark optional fields."""
+    return raw_key[:-len(" (optional)")] if raw_key.endswith(" (optional)") else raw_key
 
-    Args:
-        entity_name (str): The name of the dynamic entity
-        data (dict): The object data
-        token (str, optional): DirectLogin authentication token
 
-    Returns:
-        dict: The API response with created object
+def coerce_value(field_meta):
+    """Turn a parsed field's example/type into a POST-ready value.
+
+    Mirrors the coercion used when building the entity definition so the value
+    matches the schema property type OBP created.
     """
+    declared = field_meta.get("value") if isinstance(field_meta, dict) else None
+    example = field_meta.get("example") if isinstance(field_meta, dict) else field_meta
+    if example is None:
+        example = declared  # same fallback the definition builder uses
+
+    prop_type = declared if declared in NON_STRING_TYPES else "string"
+
+    # Normalise the raw example to a stripped string for parsing.
+    s = example
+    if isinstance(s, str):
+        s = s.strip()
+        if len(s) >= 2 and ((s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'"))):
+            s = s[1:-1].strip()
+
+    if prop_type == "integer":
+        try:
+            return int(str(s))
+        except Exception:
+            m = re.search(r"-?\d+", str(s))
+            return int(m.group()) if m else 1
+    if prop_type == "number":
+        try:
+            return float(str(s))
+        except Exception:
+            return 1.0
+    if prop_type == "boolean":
+        return str(s).strip().lower() == "true"
+    if prop_type == "json":
+        if isinstance(s, (dict, list)):
+            return s
+        try:
+            return json.loads(s)
+        except Exception:
+            return {}
+    # DATE_WITH_DAY and string
+    text = str(s) if s not in (None, "") else "sample"
+    return text
+
+
+def fk_target(entity_name, clean_field, entity_names):
+    """Return the entity a `<x>_id` field references, or None if not a FK."""
+    if not clean_field.endswith("_id"):
+        return None
+    base = clean_field[:-len("_id")]
+    if base == entity_name:
+        return None  # this entity's own primary id, not a foreign key
+    if base in entity_names:
+        return base
+    return FK_ALIASES.get(clean_field)
+
+
+def build_canonical_ids(entities):
+    """Canonical id per entity that owns a `<entity>_id` field."""
+    canonical = {}
+    for ename, wrap in entities.items():
+        fields = wrap.get("fields", {})
+        for raw_key, meta in fields.items():
+            if clean_key(raw_key) == f"{ename}_id":
+                canonical[ename] = coerce_value(meta)
+                break
+    return canonical
+
+
+def build_payload(entity_name, wrap, canonical, entity_names):
+    payload = {}
+    for raw_key, meta in wrap.get("fields", {}).items():
+        cf = clean_key(raw_key)
+        if cf == f"{entity_name}_id":
+            payload[cf] = canonical.get(entity_name, coerce_value(meta))
+            continue
+        target = fk_target(entity_name, cf, entity_names)
+        if target and target in canonical:
+            payload[cf] = canonical[target]
+            continue
+        payload[cf] = coerce_value(meta)
+    return payload
+
+
+def create_object(entity_name, data, token=None):
     url = f"{BASE_URL}/obp/dynamic-entity/{entity_name}"
-
-    headers = {
-        "Content-Type": "application/json"
-    }
-
+    headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"DirectLogin token={token}"
-
-    try:
-        response = requests.post(url, headers=headers, json=data)
-        response.raise_for_status()
-        result = response.json()
-        return result
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error creating object for {entity_name}: {e}")
-        if hasattr(e.response, 'text'):
-            logger.error(f"Response: {e.response.text}")
-        raise
-
-
-def get_dynamic_entity_object(entity_name, object_id, token=None):
-    """
-    Get a specific object from a dynamic entity.
-
-    Args:
-        entity_name (str): The name of the dynamic entity
-        object_id (str): The ID of the object to fetch
-        token (str, optional): DirectLogin authentication token
-
-    Returns:
-        dict: The API response with the object
-    """
-    url = f"{BASE_URL}/obp/dynamic-entity/{entity_name}/{object_id}"
-
-    headers = {
-        "Content-Type": "application/json"
-    }
-
-    if token:
-        headers["Authorization"] = f"DirectLogin token={token}"
-
-    try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        result = response.json()
-        return result
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error getting object for {entity_name}/{object_id}: {e}")
-        if hasattr(e.response, 'text'):
-            logger.error(f"Response: {e.response.text}")
-        raise
+    response = requests.post(url, headers=headers, json=data)
+    response.raise_for_status()
+    return response.json()
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Create dummy objects for the OGCR dynamic entities from the spreadsheet.")
+    parser.add_argument("file", nargs="?", default=DEFAULT_SPREADSHEET, help=f"Spreadsheet path (default: {DEFAULT_SPREADSHEET}).")
+    parser.add_argument("--token", default=default_token, help="DirectLogin token (overrides obp_client.py).")
+    args = parser.parse_args()
+
     logger.info("Starting Dummy Data Creation Script")
     print_separator()
 
-    # Store created IDs for referential integrity
-    created_projects = []
-    created_parcels = []
-
-    # =========================================================================
-    # STEP 1: Create Projects
-    # =========================================================================
-    logger.info("STEP 1: Creating Projects")
-    print_separator("-")
-
-    projects_data = [
-        {
-            "project_owner": "John Smith - Passport: US123456789"
-        },
-        {
-            "project_owner": "Maria Garcia - Passport: ES987654321"
-        },
-        {
-            "project_owner": "Wei Chen - Passport: CN456789123"
-        }
-    ]
-
-    for idx, project_data in enumerate(projects_data, 1):
-        try:
-            response = create_dynamic_entity_object(
-                ENTITY_PROJECT,
-                project_data,
-                DIRECTLOGIN_TOKEN
-            )
-            # The response contains a nested object with key like 'ogcr2_project'
-            # Inside that object is the ID with key like 'ogcr2project_id'
-            response_key = get_response_key(ENTITY_PROJECT)
-            if response_key in response:
-                project_obj = response[response_key]
-                # The ID key inside is prefix_entityname_id (with underscores)
-                id_key = get_id_key(ENTITY_PROJECT)
-                project_id = project_obj.get(id_key)
-                if not project_id:
-                    logger.error(f"Could not find {id_key} in nested object. Available keys: {list(project_obj.keys())}")
-                    raise KeyError(f"Could not find {id_key} in response")
-            else:
-                logger.error(f"Could not find {response_key} in response. Available keys: {list(response.keys())}")
-                raise KeyError(f"Could not find {response_key} in response")
-            
-            created_projects.append(project_id)
-            logger.info(f"  ✓ [{idx}/{len(projects_data)}] Created project: {project_data['project_owner'][:30]}... (ID: {project_id})")
-            # Debug: Log the full response structure
-            logger.debug(f"Full project response: {response}")
-        except Exception as e:
-            logger.error(f"  ✗ [{idx}/{len(projects_data)}] Failed to create project: {e}")
-
-    if not created_projects:
-        logger.error("No projects created. Cannot continue with parcels.")
+    entities = parse_xlsx_entities(args.file)
+    if not entities:
+        logger.error(f"No entities parsed from {args.file}")
         return
+    entity_names = set(entities.keys())
+    canonical = build_canonical_ids(entities)
+    logger.info(f"Parsed {len(entities)} entities; {len(canonical)} have their own id field")
 
-    print_separator()
-    
-    # Debug: Log the created project IDs
-    logger.info(f"Created project IDs: {created_projects}")
-    
-    # Verify projects exist by fetching them back
-    logger.info("Verifying created projects exist...")
-    for project_id in created_projects:
-        try:
-            project = get_dynamic_entity_object(ENTITY_PROJECT, project_id, DIRECTLOGIN_TOKEN)
-            logger.info(f"  ✓ Verified project {project_id[:8]}... exists")
-        except Exception as e:
-            logger.error(f"  ✗ Failed to verify project {project_id}: {e}")
+    # Order: preferred first, then any remaining in spreadsheet order.
+    ordered = [n for n in PREFERRED_ORDER if n in entities]
+    ordered += [n for n in entities if n not in ordered]
 
-    # =========================================================================
-    # STEP 2: Create Parcels
-    # =========================================================================
-    logger.info("STEP 2: Creating Parcels")
     print_separator("-")
-
-    # Use the proper foreign key field name that matches the referenced entity's ID field
-    project_id_field = f"{ENTITY_PROJECT}_id"
-    
-    parcels_data = [
-        {
-            project_id_field: created_projects[0],
-            "parcel_owner": "John Smith - Passport: US123456789",
-            "geo_data": '{"type":"Polygon","coordinates":[[[-122.4,37.8],[-122.4,37.7],[-122.3,37.7],[-122.3,37.8],[-122.4,37.8]]]}'
-        },
-        {
-            project_id_field: created_projects[0],
-            "parcel_owner": "John Smith - Passport: US123456789",
-            "geo_data": '{"type":"Polygon","coordinates":[[[-122.3,37.8],[-122.3,37.7],[-122.2,37.7],[-122.2,37.8],[-122.3,37.8]]]}'
-        },
-        {
-            project_id_field: created_projects[1],
-            "parcel_owner": "Maria Garcia - Passport: ES987654321",
-            "geo_data": '{"type":"Polygon","coordinates":[[[-3.7,40.4],[-3.7,40.3],[-3.6,40.3],[-3.6,40.4],[-3.7,40.4]]]}'
-        },
-        {
-            project_id_field: created_projects[1],
-            "parcel_owner": "Maria Garcia - Passport: ES987654321",
-            "geo_data": '{"type":"Polygon","coordinates":[[[-3.6,40.4],[-3.6,40.3],[-3.5,40.3],[-3.5,40.4],[-3.6,40.4]]]}'
-        },
-        {
-            project_id_field: created_projects[2],
-            "parcel_owner": "Wei Chen - Passport: CN456789123",
-            "geo_data": '{"type":"Polygon","coordinates":[[[116.4,39.9],[116.4,39.8],[116.5,39.8],[116.5,39.9],[116.4,39.9]]]}'
-        }
-    ]
-
-    for idx, parcel_data in enumerate(parcels_data, 1):
+    created = 0
+    failed = 0
+    for idx, ename in enumerate(ordered, 1):
+        wrap = entities[ename]
+        payload = build_payload(ename, wrap, canonical, entity_names)
         try:
-            response = create_dynamic_entity_object(
-                ENTITY_PARCEL,
-                parcel_data,
-                DIRECTLOGIN_TOKEN
-            )
-            response_key = get_response_key(ENTITY_PARCEL)
-            if response_key in response:
-                parcel_obj = response[response_key]
-                id_key = get_id_key(ENTITY_PARCEL)
-                parcel_id = parcel_obj.get(id_key)
-                if not parcel_id:
-                    logger.error(f"Could not find {id_key} in nested object. Available keys: {list(parcel_obj.keys())}")
-                    raise KeyError(f"Could not find {id_key} in response")
-            else:
-                logger.error(f"Could not find {response_key} in response. Available keys: {list(response.keys())}")
-                raise KeyError(f"Could not find {response_key} in response")
-            
-            # Store parcel ID and project_id for later use
-            created_parcels.append({
-                "parcel_id": parcel_id,
-                "project_id": parcel_data[project_id_field]
-            })
-            logger.info(f"  ✓ [{idx}/{len(parcels_data)}] Created parcel for project {parcel_data[project_id_field][:8]}... (ID: {parcel_id})")
+            resp = create_object(ename, payload, token=args.token)
+            obj = resp.get(ename, resp)
+            obj_id = obj.get(f"{ename}_id", "<auto>")
+            logger.info(f"  ✓ [{idx}/{len(ordered)}] Created {ename} (id: {obj_id})")
+            created += 1
+        except requests.exceptions.HTTPError as e:
+            detail = e.response.text if getattr(e, "response", None) is not None else str(e)
+            logger.error(f"  ✗ [{idx}/{len(ordered)}] Failed {ename}: {detail}")
+            failed += 1
         except Exception as e:
-            logger.error(f"  ✗ [{idx}/{len(parcels_data)}] Failed to create parcel: {e}")
+            logger.error(f"  ✗ [{idx}/{len(ordered)}] Failed {ename}: {e}")
+            failed += 1
 
-    if not created_parcels:
-        logger.error("No parcels created. Cannot continue with verifications.")
-        return
-
-    print_separator()
-
-    # =========================================================================
-    # STEP 3: Create Parcel Ownership Verifications
-    # =========================================================================
-    logger.info("STEP 3: Creating Parcel Ownership Verifications")
     print_separator("-")
-
-    for idx, parcel in enumerate(created_parcels, 1):
-        parcel_id_field = f"{ENTITY_PARCEL}_id"
-        verification_data = {
-            parcel_id_field: parcel["parcel_id"],
-            "status_code": "verified" if idx % 3 != 0 else "in_progress",
-            "status_message": "Ownership verified successfully" if idx % 3 != 0 else "Verification pending cadastre response",
-            "authority": "National Land Registry"
-        }
-
-        try:
-            response = create_dynamic_entity_object(
-                ENTITY_PARCEL_OWNERSHIP_VERIFICATION,
-                verification_data,
-                DIRECTLOGIN_TOKEN
-            )
-            response_key = get_response_key(ENTITY_PARCEL_OWNERSHIP_VERIFICATION)
-            verification_obj = response.get(response_key, {})
-            id_key = get_id_key(ENTITY_PARCEL_OWNERSHIP_VERIFICATION)
-            verification_id = verification_obj.get(id_key)
-            logger.info(f"  ✓ [{idx}/{len(created_parcels)}] Created ownership verification for parcel {parcel['parcel_id'][:8]}... (Status: {verification_data['status_code']})")
-        except Exception as e:
-            logger.error(f"  ✗ [{idx}/{len(created_parcels)}] Failed to create ownership verification: {e}")
-
-    print_separator()
-
-    # =========================================================================
-    # STEP 4: Create Project Verifications
-    # =========================================================================
-    logger.info("STEP 4: Creating Project Verifications")
-    print_separator("-")
-
-    for idx, project_id in enumerate(created_projects, 1):
-        project_id_field = f"{ENTITY_PROJECT}_id"
-        verification_data = {
-            project_id_field: project_id,
-            "status_code": "verified" if idx % 2 == 0 else "in_progress",
-            "status_message": "Project methodology verified" if idx % 2 == 0 else "Awaiting documentation review"
-        }
-
-        try:
-            response = create_dynamic_entity_object(
-                ENTITY_PROJECT_VERIFICATION,
-                verification_data,
-                DIRECTLOGIN_TOKEN
-            )
-            response_key = get_response_key(ENTITY_PROJECT_VERIFICATION)
-            verification_obj = response.get(response_key, {})
-            id_key = get_id_key(ENTITY_PROJECT_VERIFICATION)
-            verification_id = verification_obj.get(id_key)
-            logger.info(f"  ✓ [{idx}/{len(created_projects)}] Created project verification for {project_id[:8]}... (Status: {verification_data['status_code']})")
-        except Exception as e:
-            logger.error(f"  ✗ [{idx}/{len(created_projects)}] Failed to create project verification: {e}")
-
-    print_separator()
-
-    # =========================================================================
-    # STEP 5: Create Project-Parcel Verifications
-    # =========================================================================
-    logger.info("STEP 5: Creating Project-Parcel Verifications")
-    print_separator("-")
-
-    for idx, parcel in enumerate(created_parcels, 1):
-        parcel_id_field = f"{ENTITY_PARCEL}_id"
-        project_id_field = f"{ENTITY_PROJECT}_id"
-        verification_data = {
-            parcel_id_field: parcel["parcel_id"],
-            project_id_field: parcel["project_id"],
-            "status_code": "verified" if idx % 4 != 0 else "failed",
-            "status_message": "Baseline carbon estimation completed" if idx % 4 != 0 else "Insufficient historical data",
-            "amount": 150 + (idx * 50) if idx % 4 != 0 else 0
-        }
-
-        try:
-            response = create_dynamic_entity_object(
-                ENTITY_PROJECT_PARCEL_VERIFICATION,
-                verification_data,
-                DIRECTLOGIN_TOKEN
-            )
-            response_key = get_response_key(ENTITY_PROJECT_PARCEL_VERIFICATION)
-            verification_obj = response.get(response_key, {})
-            id_key = get_id_key(ENTITY_PROJECT_PARCEL_VERIFICATION)
-            verification_id = verification_obj.get(id_key)
-            logger.info(f"  ✓ [{idx}/{len(created_parcels)}] Created project-parcel verification (Amount: {verification_data['amount']} tons CO2)")
-        except Exception as e:
-            logger.error(f"  ✗ [{idx}/{len(created_parcels)}] Failed to create project-parcel verification: {e}")
-
-    print_separator()
-
-    # =========================================================================
-    # STEP 6: Create Parcel Monitoring Period Verifications
-    # =========================================================================
-    logger.info("STEP 6: Creating Parcel Monitoring Period Verifications")
-    print_separator("-")
-
-    for idx, parcel in enumerate(created_parcels, 1):
-        parcel_id_field = f"{ENTITY_PARCEL}_id"
-        project_id_field = f"{ENTITY_PROJECT}_id"
-        verification_data = {
-            parcel_id_field: parcel["parcel_id"],
-            project_id_field: parcel["project_id"],
-            "status_code": "verified" if idx % 3 != 0 else "in_progress",
-            "status_message": "Monitoring period Q1-2024 verified" if idx % 3 != 0 else "Awaiting satellite data analysis",
-            "amount": 80 + (idx * 30) if idx % 3 != 0 else 0
-        }
-
-        try:
-            response = create_dynamic_entity_object(
-                ENTITY_PARCEL_MONITORING_PERIOD_VERIFICATION,
-                verification_data,
-                DIRECTLOGIN_TOKEN
-            )
-            response_key = get_response_key(ENTITY_PARCEL_MONITORING_PERIOD_VERIFICATION)
-            verification_obj = response.get(response_key, {})
-            id_key = get_id_key(ENTITY_PARCEL_MONITORING_PERIOD_VERIFICATION)
-            verification_id = verification_obj.get(id_key)
-            logger.info(f"  ✓ [{idx}/{len(created_parcels)}] Created parcel monitoring verification (Amount: {verification_data['amount']} tons CO2)")
-        except Exception as e:
-            logger.error(f"  ✗ [{idx}/{len(created_parcels)}] Failed to create parcel monitoring verification: {e}")
-
-    print_separator()
-
-    # =========================================================================
-    # STEP 7: Create Project Period Verifications
-    # =========================================================================
-    logger.info("STEP 7: Creating Project Period Verifications")
-    print_separator("-")
-
-    for idx, project_id in enumerate(created_projects, 1):
-        project_id_field = f"{ENTITY_PROJECT}_id"
-        verification_data = {
-            project_id_field: project_id,
-            "status_code": "verified" if idx % 2 == 1 else "in_progress",
-            "status_message": "Q1-2024 project period verified" if idx % 2 == 1 else "Pending final aggregation review"
-        }
-
-        try:
-            response = create_dynamic_entity_object(
-                ENTITY_PROJECT_MONITORING_PERIOD_VERIFICATION,
-                verification_data,
-                DIRECTLOGIN_TOKEN
-            )
-            response_key = get_response_key(ENTITY_PROJECT_MONITORING_PERIOD_VERIFICATION)
-            verification_obj = response.get(response_key, {})
-            id_key = get_id_key(ENTITY_PROJECT_MONITORING_PERIOD_VERIFICATION)
-            verification_id = verification_obj.get(id_key)
-            logger.info(f"  ✓ [{idx}/{len(created_projects)}] Created project period verification for {project_id[:8]}... (Status: {verification_data['status_code']})")
-        except Exception as e:
-            logger.error(f"  ✗ [{idx}/{len(created_projects)}] Failed to create project period verification: {e}")
-
-    print_separator()
-
-    # =========================================================================
-    # Summary
-    # =========================================================================
-    logger.info("SUMMARY")
-    print_separator("-")
-    logger.info(f"✓ Created {len(created_projects)} projects")
-    logger.info(f"✓ Created {len(created_parcels)} parcels")
-    logger.info(f"✓ Created verification records for all entities")
-    print_separator()
-
-    logger.info("Dummy Data Creation Script Completed Successfully!")
+    logger.info(f"Dummy Data Summary: {created} created, {failed} failed")
     print_separator("=")
 
 

@@ -88,6 +88,27 @@ Notes:
 - Always regenerate `entities_output.txt` (step 1) after editing the spreadsheet, so the delete list matches what you are about to create.
 - `delete_entities.py` options: `file` (positional, default `entities_output.txt`), `--yes` (skip confirmation), `--token` (override the DirectLogin token).
 
+**Create dummy data**
+
+`create_dummy_data.py` creates one sample object per entity, driven by the same spreadsheet. Run it *after* the entities exist on OBP (see "Re-create the entities" above):
+
+```bash
+python3 create_dummy_data.py [path/to/min_field_matrix.xlsx] [--token TOKEN]
+```
+
+- **`file`** (positional): spreadsheet path. Defaults to `min_field_matrix.xlsx`.
+- **`--token`**: DirectLogin token (overrides the token from `obp_client.py`).
+
+How it works:
+- **Values come from the spreadsheet** — each field is populated from its column G `example` value, coerced to the field's declared type (string, `integer`, `number`, `boolean`, `json`, `DATE_WITH_DAY`).
+- **Foreign keys are made valid** — any `<entity>_id` field is overwritten with the real id of the referenced object, so the dummy data is referentially consistent (e.g. `activity.operator_id` points at the created `operator`, and `audit_report` links to the operator, activity, scheme, body, plans and certificate).
+- Entities that own an `<entity>_id` field get a canonical id taken from the spreadsheet example; the verification/report entities without one receive an OBP-generated UUID.
+- The field `compliance_certificate_id` (which does not follow the `<entity>_id` convention) is mapped to `certificate_of_compliance` via an explicit alias in the script (`FK_ALIASES`).
+
+Notes:
+- It creates **one record per entity**. To create more (e.g. several parcels under one activity), extend the payload loop in `main()`.
+- It is fully spreadsheet-driven — it does **not** use the hardcoded entities in `dynamic_entities.py`.
+
 **`main.py` — Usage**
 - Run the management workflow (delete objects, delete entity definitions, recreate entities):
 

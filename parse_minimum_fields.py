@@ -60,30 +60,30 @@ def parse_xlsx_entities(file_path):
 			col_b_value = row.iloc[1] if len(row) > 1 and pd.notna(row.iloc[1]) else ""
 			col_c_value = row.iloc[2] if len(row) > 2 and pd.notna(row.iloc[2]) else ""
 			col_d_value = row.iloc[3] if len(row) > 3 and pd.notna(row.iloc[3]) else ""
-			# Column G (index 6) holds descriptions; Column H (index 7) holds examples
+			# Column F (index 5) holds descriptions; Column G (index 6) holds examples
+			col_f_value = row.iloc[5] if len(row) > 5 and pd.notna(row.iloc[5]) else ""
 			col_g_value = row.iloc[6] if len(row) > 6 and pd.notna(row.iloc[6]) else ""
-			col_h_value = row.iloc[7] if len(row) > 7 and pd.notna(row.iloc[7]) else ""
 
 			# Convert to string for processing (handle Excel dates safely)
 			col_a_str = str(col_a_value).strip()
 			col_b_str = str(col_b_value).strip()
 			col_c_str = str(col_c_value).strip()
 			col_d_str = str(col_d_value).strip()
-			col_g_str = str(col_g_value).strip()
+			col_f_str = str(col_f_value).strip()
 			# If pandas read a datetime/timestamp, format as YYYY-MM-DD to match DATE_WITH_DAY
-			if col_h_value == "" or pd.isna(col_h_value):
-				col_h_str = ""
+			if col_g_value == "" or pd.isna(col_g_value):
+				col_g_str = ""
 			else:
-				if isinstance(col_h_value, (pd.Timestamp, datetime.datetime, datetime.date)):
+				if isinstance(col_g_value, (pd.Timestamp, datetime.datetime, datetime.date)):
 					try:
-						col_h_str = col_h_value.strftime("%Y-%m-%d")
+						col_g_str = col_g_value.strftime("%Y-%m-%d")
 					except Exception:
-						col_h_str = str(col_h_value).strip()
+						col_g_str = str(col_g_value).strip()
 				else:
-					col_h_str = str(col_h_value).strip()
+					col_g_str = str(col_g_value).strip()
 
 			# Clean example string: remove surrounding double or single quotes if present
-			cleaned_example = col_h_str
+			cleaned_example = col_g_str
 			if len(cleaned_example) >= 2:
 				if (cleaned_example.startswith('"') and cleaned_example.endswith('"')) or (
 					cleaned_example.startswith("'") and cleaned_example.endswith("'")
@@ -107,8 +107,8 @@ def parse_xlsx_entities(file_path):
 				entity_name = col_a_str[7:].strip()  # Remove "entity:" prefix
 				current_entity = entity_name
 				current_dict = {}
-				# capture entity-level description from column G when present
-				current_entity_description = col_g_str if col_g_str else f"Parsed entity {entity_name}"
+				# capture entity-level description from column F when present
+				current_entity_description = col_f_str if col_f_str else f"Parsed entity {entity_name}"
 
 			elif current_entity:
 				# Add to current entity dictionary if we have a valid key
@@ -127,12 +127,12 @@ def parse_xlsx_entities(file_path):
 
 					if has_green_check_b:
 						# Column B has green check - add normally; preserve column D as value
-						# and attach column H as explicit example when available
+						# and attach column G as explicit example when available
 						entry = {"value": col_d_str}
 						if cleaned_example:
 							entry["example"] = cleaned_example
-						if col_g_str:
-							entry["description"] = col_g_str
+						if col_f_str:
+							entry["description"] = col_f_str
 						current_dict[safe_key] = entry
 					elif has_green_check_c:
 						# Column C has green check but not B - mark as optional
@@ -140,8 +140,8 @@ def parse_xlsx_entities(file_path):
 						entry = {"value": col_d_str}
 						if cleaned_example:
 							entry["example"] = cleaned_example
-						if col_g_str:
-							entry["description"] = col_g_str
+						if col_f_str:
+							entry["description"] = col_f_str
 						current_dict[opt_key] = entry
 				# If neither B nor C has green check, skip this row
 

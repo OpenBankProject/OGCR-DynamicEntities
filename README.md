@@ -33,19 +33,60 @@ python3 parse_minimum_fields.py [path/to/min_field_matrix.xlsx]
 python3 parse_minimum_fields.py [path/to/min_field_matrix.xlsx] --create
 ```
 
+- **Update existing dynamic entities on OBP:**
+
+```bash
+python3 parse_minimum_fields.py [path/to/min_field_matrix.xlsx] --update
+```
+
+`--update` looks up each existing dynamic entity by name and updates its definition in place (entities not found on OBP are skipped). Use `--create` for fresh entities and `--update` to modify ones that already exist.
+
 - **Options:**
   - **`file`** (positional): Path to the Excel file. Defaults to `min_field_matrix.xlsx`.
   - **`--create`**: If set, the script will POST created entity definitions to the OBP management API.
+  - **`--update`**: If set, update existing dynamic entities (matched by name) instead of creating new ones.
   - **`--token`**: DirectLogin token to use (overrides token from `obp_client.py`).
   - **`--host`**: OBP host/base URL to use (overrides `OBP_HOSTNAME`).
   - **`--yes`**: When used with `--create`, skip interactive confirmation prompt.
 
+> **Note:** `--create` only *creates* — it does not delete existing entities or objects first. To do a clean wipe-and-recreate, use `main.py` (which deletes objects and entity definitions before recreating), but note that `main.py` rebuilds from the hardcoded entities in `dynamic_entities.py`, **not** from a spreadsheet.
+
 Notes about parsing behavior:
 - Column A is used for field names and `entity:` rows start new entities.
-- Column D is preserved as the `value` in the parsed attribute dict.
-- Column H is used as the `example` value for attributes when present.
+- Column D is preserved as the `value` (type) in the parsed attribute dict.
+- Column F is used as the `description` for attributes (and the entity-level description on `entity:` rows).
+- Column G is used as the `example` value for attributes when present.
 - Field names are sanitized: dots and other disallowed characters are replaced by underscore (`_`), repeated underscores are collapsed, and leading/trailing underscores are removed.
-- Example strings from column H have surrounding single or double quotes stripped.
+- Example strings from column G have surrounding single or double quotes stripped.
+
+**Re-create the entities (delete then create from the spreadsheet)**
+
+A clean wipe-and-recreate driven entirely by the spreadsheet (this is what `main.py` does *not* do — `main.py` is tied to the hardcoded list in `dynamic_entities.py`):
+
+1. **Parse and save** the entity list to `entities_output.txt`:
+
+```bash
+python3 parse_minimum_fields.py min_field_matrix.xlsx
+# answer "y" when prompted, accept the default filename entities_output.txt
+```
+
+2. **Delete** those entities and all their records on OBP with `delete_entities.py`:
+
+```bash
+python3 delete_entities.py            # reads entities_output.txt by default; prompts for confirmation
+python3 delete_entities.py --yes      # skip the confirmation prompt
+```
+
+3. **Re-create** the entities from the spreadsheet:
+
+```bash
+python3 parse_minimum_fields.py min_field_matrix.xlsx --create --yes
+```
+
+Notes:
+- `delete_entities.py` deletes exactly the entities listed in `entities_output.txt` (one per `Entity:` line). If an entity was **renamed** in the spreadsheet, the old name is *not* in the file and will be left on OBP as an orphan — delete it separately.
+- Always regenerate `entities_output.txt` (step 1) after editing the spreadsheet, so the delete list matches what you are about to create.
+- `delete_entities.py` options: `file` (positional, default `entities_output.txt`), `--yes` (skip confirmation), `--token` (override the DirectLogin token).
 
 **`main.py` — Usage**
 - Run the management workflow (delete objects, delete entity definitions, recreate entities):

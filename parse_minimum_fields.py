@@ -168,6 +168,8 @@ def main():
 	parser.add_argument("--token", default=None, help="DirectLogin token to use (overrides obp_client.token)")
 	parser.add_argument("--host", default=None, help="OBP host to use (overrides obp_client.obp_host)")
 	parser.add_argument("--yes", action="store_true", help="If set with --create, skip confirmation prompt")
+	parser.add_argument("--save", action="store_true", help="Save parsed entities to --output non-interactively (no prompt)")
+	parser.add_argument("--output", default="entities_output.txt", help="Output file used by --save (default: entities_output.txt)")
 	args = parser.parse_args()
 	file_path = args.file
 
@@ -256,31 +258,41 @@ def main():
 		# end create loop
 		return
 
-	# If not creating, offer to save to file
+	# Non-interactive save (used by scripts, e.g. recreate_ogcr_entities.sh)
+	if args.save:
+		_write_entities_file(entities, file_path, args.output)
+		return
+
+	# Otherwise, offer to save interactively
 	save_option = input("\nSave results to a file? (y/n): ").lower().strip()
 	if save_option in ['y', 'yes']:
 		output_file = input("Enter output filename (default: entities_output.txt): ").strip()
 		if not output_file:
 			output_file = "entities_output.txt"
+		_write_entities_file(entities, file_path, output_file)
 
-		try:
-			with open(output_file, 'w', encoding='utf-8') as f:
-				f.write(f"Parsed entities from: {file_path}\n")
-				f.write("=" * 50 + "\n\n")
 
-				for entity_name, entity_dict in entities.items():
-					f.write(f"Entity: {entity_name}\n")
-					f.write("-" * 30 + "\n")
-					if entity_dict:
-						for key, value in entity_dict.items():
-							f.write(f"  {key}: {value}\n")
-					else:
-						f.write("  (No data)\n")
-					f.write("\n")
+def _write_entities_file(entities, file_path, output_file):
+	"""Write parsed entities to `output_file` in the `Entity: <name>` format
+	consumed by delete_ogcr_entities.py."""
+	try:
+		with open(output_file, 'w', encoding='utf-8') as f:
+			f.write(f"Parsed entities from: {file_path}\n")
+			f.write("=" * 50 + "\n\n")
 
-			print(f"Results saved to: {output_file}")
-		except Exception as e:
-			print(f"Error saving file: {e}")
+			for entity_name, entity_dict in entities.items():
+				f.write(f"Entity: {entity_name}\n")
+				f.write("-" * 30 + "\n")
+				if entity_dict:
+					for key, value in entity_dict.items():
+						f.write(f"  {key}: {value}\n")
+				else:
+					f.write("  (No data)\n")
+				f.write("\n")
+
+		print(f"Results saved to: {output_file}")
+	except Exception as e:
+		print(f"Error saving file: {e}")
 
 
 if __name__ == "__main__":

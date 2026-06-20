@@ -136,6 +136,18 @@ def fk_target(entity_name, clean_field, entity_names):
     return FK_ALIASES.get(clean_field)
 
 
+def reference_target(declared_type):
+    """Return the target entity of an OBP `reference:<entity>` typed field, else None.
+
+    Handles both our dynamic entities (`reference:operator`) and OBP static
+    entities (`reference:BankAccount:bankId&accountId`); the caller decides
+    whether the returned name is one we actually create.
+    """
+    if isinstance(declared_type, str) and declared_type.startswith("reference:"):
+        return declared_type.split(":", 2)[1]
+    return None
+
+
 def build_canonical_ids(entities):
     """Canonical id per entity that owns a `<entity>_id` field."""
     canonical = {}
@@ -148,17 +160,45 @@ def build_canonical_ids(entities):
     return canonical
 
 
-def build_payload(entity_name, wrap, canonical, entity_names):
+def build_payload(entity_name, wrap, canonical, entity_names, real_ids):
+    """Build a POST payload, resolving foreign keys to real ids.
+
+    `real_ids` maps an already-created entity -> the id OBP actually stored for
+    it. It is pre-seeded from `canonical` and upgraded to each create response's
+    id as objects are created (parents first), so an OBP-typed `reference:<x>`
+    field always points at a real, existing record of `<x>`.
+    """
     payload = {}
     for raw_key, meta in wrap.get("fields", {}).items():
         cf = clean_key(raw_key)
+        declared = meta.get("value") if isinstance(meta, dict) else None
+
+        # This entity's own primary id.
         if cf == f"{entity_name}_id":
             payload[cf] = canonical.get(entity_name, coerce_value(meta))
             continue
+
+        # OBP `reference:<entity>` foreign key -> the real id of that entity.
+        ref = reference_target(declared)
+        if ref is not None:
+            if real_ids.get(ref) is not None:
+                payload[cf] = real_ids[ref]
+            else:
+                # Reference to a static OBP entity (Bank, BankAccount, ...) or an
+                # entity we don't create here: fall back to the example value.
+                logger.warning(
+                    f"{entity_name}.{cf}: reference target '{ref}' is not a created "
+                    f"dynamic entity; using the spreadsheet example value"
+                )
+                payload[cf] = coerce_value(meta)
+            continue
+
+        # Plain-string `<entity>_id` foreign key (not declared as a reference type).
         target = fk_target(entity_name, cf, entity_names)
         if target and target in canonical:
             payload[cf] = canonical[target]
             continue
+
         payload[cf] = coerce_value(meta)
     return payload
 
@@ -194,16 +234,23 @@ def main():
     ordered = [n for n in PREFERRED_ORDER if n in entities]
     ordered += [n for n in entities if n not in ordered]
 
+    # Real ids of created objects, used to resolve `reference:` foreign keys.
+    # Seeded from canonical (OBP preserves supplied `<entity>_id` values) and
+    # upgraded to the id OBP actually returns after each successful create.
+    real_ids = dict(canonical)
+
     print_separator("-")
     created = 0
     failed = 0
     for idx, ename in enumerate(ordered, 1):
         wrap = entities[ename]
-        payload = build_payload(ename, wrap, canonical, entity_names)
+        payload = build_payload(ename, wrap, canonical, entity_names, real_ids)
         try:
             resp = create_object(ename, payload, token=args.token)
             obj = resp.get(ename, resp)
             obj_id = obj.get(f"{ename}_id", "<auto>")
+            if obj.get(f"{ename}_id") is not None:
+                real_ids[ename] = obj[f"{ename}_id"]
             logger.info(f"  ✓ [{idx}/{len(ordered)}] Created {ename} (id: {obj_id})")
             created += 1
         except requests.exceptions.HTTPError as e:

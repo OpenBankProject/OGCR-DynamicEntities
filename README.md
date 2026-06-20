@@ -66,15 +66,15 @@ A clean wipe-and-recreate driven entirely by the spreadsheet (this is what `main
 1. **Parse and save** the entity list to `entities_output.txt`:
 
 ```bash
-python3 parse_minimum_fields.py min_field_matrix.xlsx
-# answer "y" when prompted, accept the default filename entities_output.txt
+python3 parse_minimum_fields.py min_field_matrix.xlsx --save   # non-interactive
+# or run without --save and answer "y" at the prompt (default filename entities_output.txt)
 ```
 
-2. **Delete** those entities and all their records on OBP with `delete_entities.py`:
+2. **Delete** those entities and all their records on OBP with `delete_ogcr_entities.py`:
 
 ```bash
-python3 delete_entities.py            # reads entities_output.txt by default; prompts for confirmation
-python3 delete_entities.py --yes      # skip the confirmation prompt
+python3 delete_ogcr_entities.py            # reads entities_output.txt by default; prompts for confirmation
+python3 delete_ogcr_entities.py --yes      # skip the confirmation prompt
 ```
 
 3. **Re-create** the entities from the spreadsheet:
@@ -84,9 +84,10 @@ python3 parse_minimum_fields.py min_field_matrix.xlsx --create --yes
 ```
 
 Notes:
-- `delete_entities.py` deletes exactly the entities listed in `entities_output.txt` (one per `Entity:` line). If an entity was **renamed** in the spreadsheet, the old name is *not* in the file and will be left on OBP as an orphan — delete it separately.
+- `delete_ogcr_entities.py` deletes exactly the entities listed in `entities_output.txt` (one per `Entity:` line) and leaves all other dynamic entities on the instance untouched. If an entity was **renamed** in the spreadsheet, the old name is *not* in the file and will be left on OBP as an orphan — delete it separately. To wipe **every** dynamic entity instead, use `delete_all_dynamic_entities.py`.
+- Deletion runs in repeated passes so reference (foreign-key) constraints between entities don't block a clean delete, and it exits non-zero if anything it was asked to delete survives.
 - Always regenerate `entities_output.txt` (step 1) after editing the spreadsheet, so the delete list matches what you are about to create.
-- `delete_entities.py` options: `file` (positional, default `entities_output.txt`), `--yes` (skip confirmation), `--token` (override the DirectLogin token).
+- `delete_ogcr_entities.py` options: `file` (positional, default `entities_output.txt`), `--yes` (skip confirmation), `--token` (override the DirectLogin token).
 
 **Create dummy data**
 

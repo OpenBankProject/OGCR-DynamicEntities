@@ -30,6 +30,13 @@ import requests
 
 from obp_client import token as default_token, obp_host
 from parse_minimum_fields import parse_xlsx_entities
+from ogcr_log_entity import (
+    ensure_log_entity,
+    log_event,
+    LOG_ENTITY_NAME,
+    EVENT_CREATED,
+    EVENT_FAILED,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -167,8 +174,15 @@ def build_payload(entity_name, wrap, canonical, entity_names, real_ids):
     it. It is pre-seeded from `canonical` and upgraded to each create response's
     id as objects are created (parents first), so an OBP-typed `reference:<x>`
     field always points at a real, existing record of `<x>`.
+
+    Returns `(payload, references)`, where `references` is a list of
+    `{field, target, resolution, value}` dicts describing every `reference:<x>`
+    field on the entity and how it resolved — `resolved` when a real created id
+    was used, or `fallback` when the spreadsheet example value was used instead.
+    The caller records this list in the log entity.
     """
     payload = {}
+    references = []
     for raw_key, meta in wrap.get("fields", {}).items():
         cf = clean_key(raw_key)
         declared = meta.get("value") if isinstance(meta, dict) else None
@@ -182,15 +196,21 @@ def build_payload(entity_name, wrap, canonical, entity_names, real_ids):
         ref = reference_target(declared)
         if ref is not None:
             if real_ids.get(ref) is not None:
-                payload[cf] = real_ids[ref]
+                value = real_ids[ref]
+                resolution = "resolved"
             else:
                 # Reference to a static OBP entity (Bank, BankAccount, ...) or an
                 # entity we don't create here: fall back to the example value.
+                value = coerce_value(meta)
+                resolution = "fallback"
                 logger.warning(
                     f"{entity_name}.{cf}: reference target '{ref}' is not a created "
                     f"dynamic entity; using the spreadsheet example value"
                 )
-                payload[cf] = coerce_value(meta)
+            payload[cf] = value
+            references.append(
+                {"field": cf, "target": ref, "resolution": resolution, "value": str(value)}
+            )
             continue
 
         # Plain-string `<entity>_id` foreign key (not declared as a reference type).
@@ -200,7 +220,7 @@ def build_payload(entity_name, wrap, canonical, entity_names, real_ids):
             continue
 
         payload[cf] = coerce_value(meta)
-    return payload
+    return payload, references
 
 
 def create_object(entity_name, data, token=None):
@@ -217,6 +237,7 @@ def main():
     parser = argparse.ArgumentParser(description="Create dummy objects for the OGCR dynamic entities from the spreadsheet.")
     parser.add_argument("file", nargs="?", default=DEFAULT_SPREADSHEET, help=f"Spreadsheet path (default: {DEFAULT_SPREADSHEET}).")
     parser.add_argument("--token", default=default_token, help="DirectLogin token (overrides obp_client.py).")
+    parser.add_argument("--no-log", action="store_true", help=f"Do not record creation/errors/fallbacks in the {LOG_ENTITY_NAME} dynamic entity.")
     args = parser.parse_args()
 
     logger.info("Starting Dummy Data Creation Script")
@@ -226,6 +247,14 @@ def main():
     if not entities:
         logger.error(f"No entities parsed from {args.file}")
         return
+
+    # Ensure the audit-log dynamic entity exists; if unavailable, carry on
+    # without logging rather than failing the data creation.
+    log_enabled = False
+    if not args.no_log:
+        log_enabled = ensure_log_entity(token=args.token) is not None
+        if not log_enabled:
+            logger.warning(f"Audit logging disabled: {LOG_ENTITY_NAME} is unavailable")
     entity_names = set(entities.keys())
     canonical = build_canonical_ids(entities)
     logger.info(f"Parsed {len(entities)} entities; {len(canonical)} have their own id field")
@@ -244,7 +273,8 @@ def main():
     failed = 0
     for idx, ename in enumerate(ordered, 1):
         wrap = entities[ename]
-        payload = build_payload(ename, wrap, canonical, entity_names, real_ids)
+        payload, references = build_payload(ename, wrap, canonical, entity_names, real_ids)
+
         try:
             resp = create_object(ename, payload, token=args.token)
             obj = resp.get(ename, resp)
@@ -253,13 +283,33 @@ def main():
                 real_ids[ename] = obj[f"{ename}_id"]
             logger.info(f"  ✓ [{idx}/{len(ordered)}] Created {ename} (id: {obj_id})")
             created += 1
+            if log_enabled:
+                log_event(
+                    EVENT_CREATED,
+                    ename,
+                    entity_id=obj_id,
+                    status="success",
+                    message=f"Created {ename}",
+                    references=references,
+                    token=args.token,
+                )
         except requests.exceptions.HTTPError as e:
             detail = e.response.text if getattr(e, "response", None) is not None else str(e)
             logger.error(f"  ✗ [{idx}/{len(ordered)}] Failed {ename}: {detail}")
             failed += 1
+            if log_enabled:
+                log_event(
+                    EVENT_FAILED, ename, status="error", message=detail,
+                    references=references, token=args.token,
+                )
         except Exception as e:
             logger.error(f"  ✗ [{idx}/{len(ordered)}] Failed {ename}: {e}")
             failed += 1
+            if log_enabled:
+                log_event(
+                    EVENT_FAILED, ename, status="error", message=str(e),
+                    references=references, token=args.token,
+                )
 
     print_separator("-")
     logger.info(f"Dummy Data Summary: {created} created, {failed} failed")

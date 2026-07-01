@@ -181,6 +181,13 @@ def build_entity_definition_from_parsed(name, parsed_fields, has_personal=False,
         else:
             prop_type = "string"
 
+        # For numeric types, drop any non-numeric example (e.g. when the field
+        # has no example in the sheet, the declared type string like "integer"
+        # leaks in as the value). This forces the per-type default below and
+        # avoids OBP-09007 "example's type should be integer" validation errors.
+        if prop_type in ("integer", "number") and not isinstance(example_value, (int, float)):
+            example_value = None
+
         if prop_type == "string" and example_value is not None:
             try:
                 example_value = str(example_value)

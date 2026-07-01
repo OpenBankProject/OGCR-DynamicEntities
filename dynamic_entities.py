@@ -50,6 +50,9 @@ def create_system_dynamic_entity(entity_definition, token=None):
 	"""
 	Create a system-level dynamic entity in OBP.
 
+	Accepts the legacy {entity_name, has_personal_entity, definition} shape and
+	converts it to the format OBP actually expects: {hasPersonalEntity, <name>: schema}.
+
 	Args:
 		entity_definition (dict): The dynamic entity definition
 		token (str, optional): DirectLogin authentication token
@@ -57,7 +60,18 @@ def create_system_dynamic_entity(entity_definition, token=None):
 	Returns:
 		dict: The API response
 	"""
-	url = f"{BASE_URL}/obp/v6.0.0/management/system-dynamic-entities"
+	url = f"{BASE_URL}/obp/v5.1.0/management/system-dynamic-entities"
+
+	# Convert legacy format to OBP-expected format if needed
+	if "entity_name" in entity_definition and "definition" in entity_definition:
+		name = entity_definition["entity_name"]
+		has_personal = entity_definition.get("has_personal_entity", False)
+		payload = {
+			"hasPersonalEntity": has_personal,
+			name: entity_definition["definition"],
+		}
+	else:
+		payload = entity_definition
 
 	headers = {
 		"Content-Type": "application/json"
@@ -68,14 +82,14 @@ def create_system_dynamic_entity(entity_definition, token=None):
 		headers["Authorization"] = f"DirectLogin token={token}"
 
 	try:
-		response = requests.post(url, headers=headers, json=entity_definition)
+		response = requests.post(url, headers=headers, json=payload)
 		response.raise_for_status()
 		return response.json()
 	except requests.exceptions.RequestException as e:
 		logger.error(f"Error creating system dynamic entity: {e}")
 		logger.error(f"Request URL: {url}")
-		logger.error(f"Request body:\n{json.dumps(entity_definition, indent=2)}")
-		if hasattr(e.response, 'text'):
+		logger.error(f"Request body:\n{json.dumps(payload, indent=2)}")
+		if hasattr(e, 'response') and e.response is not None:
 			logger.error(f"Response: {e.response.text}")
 		raise
 
@@ -152,7 +166,7 @@ project_entity = {
 				"description": "URL to a representative image for the project"
 			},
 			"project_media_links": {
-				"type": "array",
+				"type": "json",
 				"items": { "type": "string" },
 				"example": ["https://example.org/video.mp4", "https://example.org/doc.pdf"],
 				"description": "List of media links (videos, documents, etc.)"
@@ -178,7 +192,7 @@ project_entity = {
 				"description": "Country where the project is located"
 			},
 			"project_cobenefits": {
-				"type": "array",
+				"type": "json",
 				"items": { "type": "string" },
 				"example": ["biodiversity", "water retention"],
 				"description": "List of co-benefits produced by the project"

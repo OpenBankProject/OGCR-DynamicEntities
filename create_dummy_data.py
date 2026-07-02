@@ -50,6 +50,17 @@ DEFAULT_SPREADSHEET = "min_field_matrix.xlsx"
 
 # Types OBP treats as non-string; anything else falls back to string.
 NON_STRING_TYPES = {"integer", "number", "boolean", "json", "DATE_WITH_DAY"}
+# Case-insensitive lookup so a sheet value of "Integer" maps to "integer".
+_TYPE_BY_LOWER = {t.lower(): t for t in NON_STRING_TYPES}
+# Per-type default value used when the sheet has no example (mirrors the
+# entity-definition builder's defaults so data matches the created schema).
+_TYPE_DEFAULT_VALUE = {
+    "integer": 1,
+    "number": 1.0,
+    "boolean": True,
+    "json": {},
+    "DATE_WITH_DAY": "2020-01-01",
+}
 
 # Foreign-key field names that do not follow the `<entity>_id` convention.
 FK_ALIASES = {
@@ -94,10 +105,14 @@ def coerce_value(field_meta):
     """
     declared = field_meta.get("value") if isinstance(field_meta, dict) else None
     example = field_meta.get("example") if isinstance(field_meta, dict) else field_meta
-    if example is None:
-        example = declared  # same fallback the definition builder uses
 
-    prop_type = declared if declared in NON_STRING_TYPES else "string"
+    # Match the declared type case-insensitively ("Integer" -> "integer").
+    prop_type = _TYPE_BY_LOWER.get(declared.strip().lower(), "string") if isinstance(declared, str) else "string"
+
+    # No example in the sheet: return a schema-appropriate default rather than
+    # leaking the declared type string (e.g. "Integer") as the value.
+    if example is None:
+        return _TYPE_DEFAULT_VALUE.get(prop_type, "sample")
 
     # Normalise the raw example to a stripped string for parsing.
     s = example

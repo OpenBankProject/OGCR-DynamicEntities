@@ -225,11 +225,28 @@ def build_entity_definition_from_parsed(name, parsed_fields, has_personal=False,
                 else:
                     prop_type = "string"
 
-        if prop_type == "string" and example_value is not None:
+        # An 'integer' field whose example parsed to a float: a value like 85.0
+        # is integer-valued, so coerce the example to int; a value like 0.52 is
+        # genuinely fractional, so the field is really a decimal -> promote to
+        # 'number' (the sheet's declared type was wrong).
+        if prop_type == "integer" and isinstance(example_value, float):
+            if example_value.is_integer():
+                example_value = int(example_value)
+            else:
+                logger.warning(
+                    "%s.%s: declared integer but example %r is fractional; using number",
+                    name, key, example_value,
+                )
+                prop_type = "number"
+
+        # String and reference examples must be JSON strings. Stringify any
+        # non-string example (e.g. a JSON object like {"id":...,"version":...}
+        # that landed on a reference field) so OBP accepts it.
+        if (prop_type == "string" or prop_type.startswith("reference:")) and example_value is not None and not isinstance(example_value, str):
             try:
-                example_value = str(example_value)
+                example_value = json.dumps(example_value)
             except Exception:
-                example_value = ""
+                example_value = str(example_value)
 
         prop_def = {"type": prop_type}
         if example_value is not None and example_value != "":

@@ -233,6 +233,12 @@ def build_entity_definition_from_parsed(name, parsed_fields, has_personal=False,
         # avoids OBP-09007 "example's type should be integer" validation errors.
         if prop_type in ("integer", "number") and not isinstance(example_value, (int, float)):
             example_value = None
+        # A declared-integer field with a decimal example (e.g. sheet says
+        # "integer" but gives "7.4") is a sheet data mismatch, not a real
+        # integer example — drop it too rather than send a float where OBP
+        # expects an integer and trip the same OBP-09007 validation error.
+        if prop_type == "integer" and isinstance(example_value, float):
+            example_value = None
 
         if prop_type == "string" and example_value is not None:
             try:

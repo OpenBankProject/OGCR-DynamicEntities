@@ -60,7 +60,7 @@ def create_system_dynamic_entity(entity_definition, token=None):
 	Returns:
 		dict: The API response
 	"""
-	url = f"{BASE_URL}/obp/v5.1.0/management/system-dynamic-entities"
+	url = f"{BASE_URL}/obp/v6.0.0/management/system-dynamic-entities"
 
 	# Convert legacy format to OBP-expected format if needed
 	if "entity_name" in entity_definition and "definition" in entity_definition:

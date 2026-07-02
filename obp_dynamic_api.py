@@ -57,7 +57,7 @@ def list_system_dynamic_entities(token=None, base_url=None):
     """Return the management endpoint JSON for existing system dynamic entities."""
     token = token or DEFAULT_TOKEN
     base_url = base_url or DEFAULT_HOST
-    url = f"{base_url}/obp/v5.1.0/management/system-dynamic-entities"
+    url = f"{base_url}/obp/v6.0.0/management/system-dynamic-entities"
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"DirectLogin token={token}"
@@ -73,7 +73,7 @@ def create_system_dynamic_entity(entity_definition, token=None, base_url=None):
     """
     token = token or DEFAULT_TOKEN
     base_url = base_url or DEFAULT_HOST
-    url = f"{base_url}/obp/v5.1.0/management/system-dynamic-entities"
+    url = f"{base_url}/obp/v6.0.0/management/system-dynamic-entities"
 
     headers = {"Content-Type": "application/json"}
     if token:
@@ -103,7 +103,7 @@ def update_system_dynamic_entity(dynamic_entity_id, entity_definition, token=Non
     """
     token = token or DEFAULT_TOKEN
     base_url = base_url or DEFAULT_HOST
-    url = f"{base_url}/obp/v5.1.0/management/system-dynamic-entities/{dynamic_entity_id}"
+    url = f"{base_url}/obp/v6.0.0/management/system-dynamic-entities/{dynamic_entity_id}"
 
     headers = {"Content-Type": "application/json"}
     if token:

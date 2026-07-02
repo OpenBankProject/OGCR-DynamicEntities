@@ -159,6 +159,95 @@ def parse_xlsx_entities(file_path):
 		return {}
 
 
+def _has_reference_field(fields):
+	"""True if any field declares a reference:<name> type."""
+	if not isinstance(fields, dict):
+		return False
+	for v in fields.values():
+		if isinstance(v, dict) and isinstance(v.get("value"), str) and v["value"].strip().startswith("reference:"):
+			return True
+	return False
+
+
+def _create_entities_two_pass(entities, token=None, host=None, has_personal=False, has_community=False):
+	"""Create dynamic entities in two passes so references between them always
+	resolve, even when the spreadsheet order has forward references or cycles.
+
+	Pass 1: create every entity with reference fields downgraded to plain
+	        strings, so no create depends on another entity existing yet.
+	Pass 2: PUT-update each entity that declares references, restoring the real
+	        reference:<name> types now that every target entity exists on OBP.
+	        References whose target still does not exist stay as strings.
+	"""
+	from obp_dynamic_api import (
+		create_dynamic_entity_from_parsed,
+		build_entity_definition_from_parsed,
+		update_system_dynamic_entity,
+		get_dynamic_entity_id_by_name,
+		get_existing_entity_names,
+		BUILTIN_REFERENCE_TYPES,
+	)
+
+	created_ids = {}
+
+	# ---- Pass 1: create everything with references as strings ----
+	print("Pass 1/2: creating entities (references temporarily as strings) ...")
+	for entity_name, wrapper in entities.items():
+		fields = wrapper.get("fields") if isinstance(wrapper, dict) else wrapper
+		description = wrapper.get("description") if isinstance(wrapper, dict) else None
+		print(f"Processing entity: {entity_name} ...")
+		try:
+			resp = create_dynamic_entity_from_parsed(
+				entity_name,
+				fields,
+				token=token,
+				base_url=host,
+				has_personal=has_personal,
+				has_community=has_community,
+				entity_description=description,
+				downgrade_references=True,
+			)
+			dyn_id = resp.get("dynamicEntityId", "<no-id>")
+			created_ids[entity_name] = dyn_id
+			print(f"  {'Exists' if resp.get('existing') else 'Created'}: {dyn_id}")
+		except Exception as e:
+			print(f"  Failed to create entity {entity_name}: {e}")
+
+	# ---- Pass 2: restore reference types now that all targets exist ----
+	entities_with_refs = [
+		n for n, w in entities.items()
+		if _has_reference_field(w.get("fields") if isinstance(w, dict) else w)
+	]
+	if not entities_with_refs:
+		return
+
+	print("Pass 2/2: restoring reference types ...")
+	existing_names = get_existing_entity_names(token=token, base_url=host)
+	allowed_refs = {f"reference:{n}" for n in existing_names} | BUILTIN_REFERENCE_TYPES
+
+	for entity_name in entities_with_refs:
+		wrapper = entities[entity_name]
+		fields = wrapper.get("fields") if isinstance(wrapper, dict) else wrapper
+		description = wrapper.get("description") if isinstance(wrapper, dict) else None
+		dyn_id = created_ids.get(entity_name) or get_dynamic_entity_id_by_name(entity_name, token=token, base_url=host)
+		if not dyn_id or dyn_id == "<no-id>":
+			print(f"  Skipping references for {entity_name}: entity was not created")
+			continue
+		try:
+			entity_def = build_entity_definition_from_parsed(
+				entity_name,
+				fields,
+				has_personal=has_personal,
+				has_community=has_community,
+				entity_description=description,
+				allowed_reference_types=allowed_refs,
+			)
+			update_system_dynamic_entity(dyn_id, entity_def, token=token, base_url=host)
+			print(f"  Restored references: {entity_name}")
+		except Exception as e:
+			print(f"  Failed to restore references for {entity_name}: {e}")
+
+
 def main():
 	"""Main function to run the parser."""
 	parser = argparse.ArgumentParser(description="Parse minimal field matrix and optionally create dynamic entities on OBP")
@@ -216,7 +305,8 @@ def main():
 		return
 
 	if args.create or args.update:
-		print("--create flag provided: will attempt to create parsed entities on OBP")
+		if args.create:
+			print("--create flag provided: will attempt to create parsed entities on OBP")
 		if args.update:
 			print("--update flag provided: will attempt to update existing parsed entities on OBP")
 		if not args.yes:
@@ -225,37 +315,46 @@ def main():
 				print("Aborted by user.")
 				return
 
-		# iterate and call API (create or update)
+		if args.create:
+			# Two-pass create so references between entities always resolve,
+			# regardless of spreadsheet ordering or reference cycles.
+			_create_entities_two_pass(
+				entities,
+				token=args.token,
+				host=args.host,
+				has_personal=has_personal,
+				has_community=has_community,
+			)
+			return
+
+		# --update: refresh existing entities in place. Validate references
+		# against the entities that currently exist on OBP.
+		from obp_dynamic_api import (
+			get_dynamic_entity_id_by_name,
+			build_entity_definition_from_parsed,
+			update_system_dynamic_entity,
+			get_existing_entity_names,
+			BUILTIN_REFERENCE_TYPES,
+		)
+		existing_names = get_existing_entity_names(token=args.token, base_url=args.host)
+		allowed_refs = {f"reference:{n}" for n in existing_names} | BUILTIN_REFERENCE_TYPES
 		for entity_name, entity_wrapper in entities.items():
 			print(f"Processing entity: {entity_name} ...")
 			try:
 				entity_description = entity_wrapper.get("description") if isinstance(entity_wrapper, dict) else None
 				fields = entity_wrapper.get("fields") if isinstance(entity_wrapper, dict) else entity_wrapper
-				if args.create:
-					resp = create_dynamic_entity_from_parsed(
-						entity_name,
-						fields,
-						token=args.token,
-						base_url=args.host,
-						has_personal=has_personal,
-						has_community=has_community,
-						entity_description=entity_description,
-					)
-					print(f"Created: {resp.get('dynamicEntityId', '<no-id>')}")
-				elif args.update:
-					# find existing dynamicEntityId by name
-					from obp_dynamic_api import get_dynamic_entity_id_by_name, build_entity_definition_from_parsed, update_system_dynamic_entity
-					dynamic_id = get_dynamic_entity_id_by_name(entity_name, token=args.token, base_url=args.host)
-					if not dynamic_id:
-						print(f"No existing dynamic entity found for '{entity_name}', skipping update.")
-						continue
-					# build definition and call update
-					entity_def = build_entity_definition_from_parsed(entity_name, fields, entity_description=entity_description)
-					resp = update_system_dynamic_entity(dynamic_id, entity_def, token=args.token, base_url=args.host)
-					print(f"Updated: {resp.get('dynamicEntityId', dynamic_id)}")
+				dynamic_id = get_dynamic_entity_id_by_name(entity_name, token=args.token, base_url=args.host)
+				if not dynamic_id:
+					print(f"No existing dynamic entity found for '{entity_name}', skipping update.")
+					continue
+				entity_def = build_entity_definition_from_parsed(
+					entity_name, fields, entity_description=entity_description,
+					allowed_reference_types=allowed_refs,
+				)
+				resp = update_system_dynamic_entity(dynamic_id, entity_def, token=args.token, base_url=args.host)
+				print(f"Updated: {resp.get('dynamicEntityId', dynamic_id)}")
 			except Exception as e:
 				print(f"Failed to process entity {entity_name}: {e}")
-		# end create loop
 		return
 
 	# Non-interactive save (used by scripts, e.g. recreate_ogcr_entities.sh)

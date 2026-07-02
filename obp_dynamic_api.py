@@ -15,6 +15,43 @@ from obp_client import token as DEFAULT_TOKEN, obp_host as DEFAULT_HOST
 
 logger = logging.getLogger(__name__)
 
+# Non-reference primitive types OBP accepts for a dynamic-entity property.
+SCALAR_ALLOWED_TYPES = {
+    "number",
+    "integer",
+    "boolean",
+    "string",
+    "DATE_WITH_DAY",
+    "json",
+}
+
+# OBP built-in reference targets (system entities). These are always valid
+# regardless of which dynamic entities exist. Dynamic-entity reference targets
+# (e.g. reference:parcel) are validated against the live instance instead of a
+# hardcoded list, because OBP only accepts reference:X once X has been created.
+BUILTIN_REFERENCE_TYPES = {
+    "reference:Bank",
+    "reference:Consumer",
+    "reference:Customer",
+    "reference:MethodRouting",
+    "reference:DynamicEntity",
+    "reference:TransactionRequest",
+    "reference:ProductAttribute",
+    "reference:AccountAttribute",
+    "reference:TransactionAttribute",
+    "reference:CustomerAttribute",
+    "reference:AccountApplication",
+    "reference:CardAttribute",
+    "reference:Counterparty",
+    "reference:Branch:bankId&branchId",
+    "reference:Atm:bankId&atmId",
+    "reference:BankAccount:bankId&accountId",
+    "reference:Product:bankId&productCode",
+    "reference:PhysicalCard:bankId&cardId",
+    "reference:Transaction:bankId&accountId&transactionId",
+    "reference:Counterparty:bankId&accountId&counterpartyId",
+}
+
 
 def list_system_dynamic_entities(token=None, base_url=None):
     """Return the management endpoint JSON for existing system dynamic entities."""
@@ -45,8 +82,18 @@ def create_system_dynamic_entity(entity_definition, token=None, base_url=None):
     logger.debug("Creating system dynamic entity: %s", json.dumps(entity_definition, indent=2))
 
     resp = requests.post(url, headers=headers, json=entity_definition)
-    resp.raise_for_status()
+    _raise_for_status_with_body(resp)
     return resp.json()
+
+
+def _raise_for_status_with_body(resp):
+    """Like resp.raise_for_status(), but include the OBP response body in the
+    error message so callers see e.g. OBP-09007 validation details instead of a
+    bare '400 Client Error'."""
+    if resp.status_code >= 400:
+        raise requests.exceptions.HTTPError(
+            f"{resp.status_code} for {resp.url}: {resp.text}", response=resp
+        )
 
 
 def update_system_dynamic_entity(dynamic_entity_id, entity_definition, token=None, base_url=None):
@@ -65,7 +112,7 @@ def update_system_dynamic_entity(dynamic_entity_id, entity_definition, token=Non
     logger.debug("Updating system dynamic entity %s: %s", dynamic_entity_id, json.dumps(entity_definition, indent=2))
 
     resp = requests.put(url, headers=headers, json=entity_definition)
-    resp.raise_for_status()
+    _raise_for_status_with_body(resp)
     return resp.json()
 
 
@@ -84,7 +131,26 @@ def get_dynamic_entity_id_by_name(name, token=None, base_url=None):
     return None
 
 
-def build_entity_definition_from_parsed(name, parsed_fields, has_personal=False, has_community=False, entity_description=None):
+def get_existing_entity_names(token=None, base_url=None):
+    """Return the set of dynamic-entity names that currently exist on OBP.
+
+    Used to validate reference:<name> types against the live instance, since OBP
+    only accepts a reference whose target entity has already been created.
+    """
+    names = set()
+    try:
+        existing = list_system_dynamic_entities(token=token, base_url=base_url)
+        for e in existing.get("dynamic_entities", []):
+            for k in e.keys():
+                if k not in ("hasPersonalEntity", "hasCommunityAccess", "dynamicEntityId", "userId"):
+                    names.add(k)
+    except Exception:
+        pass
+    return names
+
+
+def build_entity_definition_from_parsed(name, parsed_fields, has_personal=False, has_community=False, entity_description=None,
+                                        allowed_reference_types=None, downgrade_references=False):
     """Build and return a dynamic-entity payload dict from parsed_fields without making API calls.
 
     parsed_fields: dict mapping field_name or "field_name (optional)" -> {'value':<type>, 'example':<example>, 'description':<desc>} or scalar
@@ -98,15 +164,18 @@ def build_entity_definition_from_parsed(name, parsed_fields, has_personal=False,
             key = key[:-11]
             optional = True
 
+        # 'value' holds the declared type (from the sheet), 'example' the example.
+        # Do NOT fall back to the type string as the example: that leaks e.g.
+        # "integer" or "DATE_WITH_DAY" into the example and trips OBP-09007.
+        # When there is no example, leave example_value None so the per-type
+        # default below is used instead.
         example_value = None
-        if isinstance(example, dict):
-            example_value = example.get("example") if example.get("example") is not None else example.get("value")
-        else:
-            example_value = example
-
         declared_type = None
         if isinstance(example, dict):
+            example_value = example.get("example")
             declared_type = example.get("value")
+        else:
+            example_value = example
 
         if isinstance(example_value, str):
             s = example_value.strip()
@@ -131,55 +200,30 @@ def build_entity_definition_from_parsed(name, parsed_fields, has_personal=False,
                 except Exception:
                     example_value = s
 
-        ALLOWED_TYPES = {
-            "number",
-            "integer",
-            "boolean",
-            "string",
-            "DATE_WITH_DAY",
-            "json",
-            "reference:parcel",
-            "reference:activity_verification",
-            "reference:operator",
-            "reference:land_manager",
-            "reference:parcel_owner_verification",
-            "reference:activity",
-            "reference:activity_plan",
-            "reference:monitoring_plan",
-            "reference:certification_scheme",
-            "reference:certification_body_auditors",
-            "reference:activity_parcel_verification",
-            "reference:audit_report",
-            "reference:certificate_of_compliance",
-            "reference:parcel_monitoring_period_verification",
-            "reference:activity_monitoring_period_verification",
-            "reference:Bank",
-            "reference:Consumer",
-            "reference:Customer",
-            "reference:MethodRouting",
-            "reference:DynamicEntity",
-            "reference:TransactionRequest",
-            "reference:ProductAttribute",
-            "reference:AccountAttribute",
-            "reference:TransactionAttribute",
-            "reference:CustomerAttribute",
-            "reference:AccountApplication",
-            "reference:CardAttribute",
-            "reference:Counterparty",
-            "reference:Branch:bankId&branchId",
-            "reference:Atm:bankId&atmId",
-            "reference:BankAccount:bankId&accountId",
-            "reference:Product:bankId&productCode",
-            "reference:PhysicalCard:bankId&cardId",
-            "reference:Transaction:bankId&accountId&transactionId",
-            "reference:Counterparty:bankId&accountId&counterpartyId",
-        }
-
+        # Decide the property type. Scalar types pass through (case-insensitively,
+        # so a sheet value of "Integer" maps to "integer"). A reference:X type is
+        # kept only when it is a built-in reference OR X exists on the live OBP
+        # instance (allowed_reference_types); otherwise it is downgraded to a
+        # plain string so creation never fails on an unknown/forward reference.
+        # downgrade_references forces every reference to string (used by pass 1
+        # of the two-pass create, before all target entities exist).
         prop_type = "string"
-        if isinstance(declared_type, str) and declared_type in ALLOWED_TYPES:
-            prop_type = declared_type
-        else:
-            prop_type = "string"
+        if isinstance(declared_type, str):
+            dt = declared_type.strip()
+            scalar_by_lower = {t.lower(): t for t in SCALAR_ALLOWED_TYPES}
+            if dt in SCALAR_ALLOWED_TYPES:
+                prop_type = dt
+            elif dt.lower() in scalar_by_lower:
+                prop_type = scalar_by_lower[dt.lower()]
+            elif dt.startswith("reference:"):
+                if downgrade_references:
+                    prop_type = "string"
+                elif dt in BUILTIN_REFERENCE_TYPES:
+                    prop_type = dt
+                elif allowed_reference_types is not None and dt in allowed_reference_types:
+                    prop_type = dt
+                else:
+                    prop_type = "string"
 
         if prop_type == "string" and example_value is not None:
             try:
@@ -193,8 +237,14 @@ def build_entity_definition_from_parsed(name, parsed_fields, has_personal=False,
         else:
             if prop_type == "integer":
                 prop_def["example"] = 1
-            elif prop_type in ("number",):
+            elif prop_type == "number":
                 prop_def["example"] = 1.0
+            elif prop_type == "boolean":
+                prop_def["example"] = True
+            elif prop_type == "DATE_WITH_DAY":
+                prop_def["example"] = "2020-01-01"
+            elif prop_type == "json":
+                prop_def["example"] = {}
             elif prop_type == "array":
                 prop_def["example"] = []
             else:
@@ -223,9 +273,12 @@ def build_entity_definition_from_parsed(name, parsed_fields, has_personal=False,
     return entity_definition
 
 
-def create_dynamic_entity_from_parsed(name, parsed_fields, token=None, base_url=None, has_personal=False, has_community=False, entity_description=None):
+def create_dynamic_entity_from_parsed(name, parsed_fields, token=None, base_url=None, has_personal=False, has_community=False, entity_description=None,
+                                      allowed_reference_types=None, downgrade_references=False):
     """Create a dynamic entity using parsed fields by building the payload and POSTing it."""
-    entity_definition = build_entity_definition_from_parsed(name, parsed_fields, has_personal=has_personal, has_community=has_community, entity_description=entity_description)
+    entity_definition = build_entity_definition_from_parsed(
+        name, parsed_fields, has_personal=has_personal, has_community=has_community, entity_description=entity_description,
+        allowed_reference_types=allowed_reference_types, downgrade_references=downgrade_references)
 
     # If entity with same name already exists, return existing id instead of creating
     try:

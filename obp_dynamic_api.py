@@ -227,24 +227,39 @@ def build_entity_definition_from_parsed(name, parsed_fields, has_personal=False,
                 else:
                     prop_type = "string"
 
-        # For numeric types, drop any non-numeric example (e.g. when the field
-        # has no example in the sheet, the declared type string like "integer"
-        # leaks in as the value). This forces the per-type default below and
-        # avoids OBP-09007 "example's type should be integer" validation errors.
-        if prop_type in ("integer", "number") and not isinstance(example_value, (int, float)):
-            example_value = None
-        # A declared-integer field with a decimal example (e.g. sheet says
-        # "integer" but gives "7.4") is a sheet data mismatch, not a real
-        # integer example — drop it too rather than send a float where OBP
-        # expects an integer and trip the same OBP-09007 validation error.
+        # An 'integer' field whose example parsed to a float: a value like 85.0
+        # is integer-valued, so coerce the example to int; a value like 0.52 is
+        # genuinely fractional, so the field is really a decimal -> promote to
+        # 'number' (the sheet's declared type was wrong).
         if prop_type == "integer" and isinstance(example_value, float):
+            if example_value.is_integer():
+                example_value = int(example_value)
+            else:
+                logger.warning(
+                    "%s.%s: declared integer but example %r is fractional; using number",
+                    name, key, example_value,
+                )
+                prop_type = "number"
+
+        # A numeric field with a non-numeric example (e.g. an alphanumeric token
+        # id mistyped as integer): drop the bad example so the per-type default
+        # is used, rather than failing the whole entity. Booleans count as int.
+        if prop_type in ("integer", "number") and not isinstance(example_value, (int, float)):
+            if example_value not in (None, ""):
+                logger.warning(
+                    "%s.%s: declared %s but example %r is not numeric; using default",
+                    name, key, prop_type, example_value,
+                )
             example_value = None
 
-        if prop_type == "string" and example_value is not None:
+        # String and reference examples must be JSON strings. Stringify any
+        # non-string example (e.g. a JSON object like {"id":...,"version":...}
+        # that landed on a reference field) so OBP accepts it.
+        if (prop_type == "string" or prop_type.startswith("reference:")) and example_value is not None and not isinstance(example_value, str):
             try:
-                example_value = str(example_value)
+                example_value = json.dumps(example_value)
             except Exception:
-                example_value = ""
+                example_value = str(example_value)
 
         prop_def = {"type": prop_type}
         # "Field Is Indexed" (column K in min_field_matrix.xlsx) is required for a

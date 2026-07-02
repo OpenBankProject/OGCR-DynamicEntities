@@ -25,6 +25,7 @@ import argparse
 import json
 import logging
 import re
+import uuid
 
 import requests
 
@@ -125,8 +126,15 @@ def coerce_value(field_meta):
         try:
             return int(str(s))
         except Exception:
-            m = re.search(r"-?\d+", str(s))
-            return int(m.group()) if m else 1
+            # Float example on an integer-typed field: 85.0 -> 85 (still integer),
+            # 0.52 -> 0.52 (builder promotes the field to 'number'). Mirrors the
+            # definition builder so the value matches the created schema.
+            try:
+                f = float(str(s))
+                return int(f) if f.is_integer() else f
+            except Exception:
+                m = re.search(r"-?\d+", str(s))
+                return int(m.group()) if m else 1
     if prop_type == "number":
         try:
             return float(str(s))
@@ -170,25 +178,76 @@ def reference_target(declared_type):
     return None
 
 
+def required_ref_targets(entity_name, wrap, entity_names):
+    """Targets of *required* reference fields that we also create here.
+
+    A record cannot be POSTed until every such target record exists, so the
+    creation loop defers an entity until these are satisfied. Optional reference
+    targets are excluded: they can be omitted to break forward/cyclic references.
+    """
+    out = set()
+    for raw_key, meta in wrap.get("fields", {}).items():
+        if raw_key.endswith(" (optional)"):
+            continue
+        declared = meta.get("value") if isinstance(meta, dict) else None
+        tgt = reference_target(declared)
+        if tgt and tgt in entity_names and tgt != entity_name:
+            out.add(tgt)
+    return out
+
+
+def all_ref_targets(entity_name, wrap, entity_names):
+    """All reference targets (required and optional) that we also create here."""
+    out = set()
+    for raw_key, meta in wrap.get("fields", {}).items():
+        declared = meta.get("value") if isinstance(meta, dict) else None
+        tgt = reference_target(declared)
+        if tgt and tgt in entity_names and tgt != entity_name:
+            out.add(tgt)
+    return out
+
+
 def build_canonical_ids(entities):
-    """Canonical id per entity that owns a `<entity>_id` field."""
+    """Canonical id per entity that owns a `<entity>_id` field.
+
+    OBP preserves a supplied `<entity>_id` and uses it as a globally-unique key,
+    so if the spreadsheet reuses the same placeholder id (e.g. one UUID pasted
+    as the example id for several entities) later creates collide. De-duplicate
+    by suffixing the entity name onto any id already claimed by another entity.
+    """
     canonical = {}
+    seen = set()
     for ename, wrap in entities.items():
         fields = wrap.get("fields", {})
         for raw_key, meta in fields.items():
             if clean_key(raw_key) == f"{ename}_id":
-                canonical[ename] = coerce_value(meta)
+                cid = coerce_value(meta)
+                if isinstance(cid, str) and cid in seen:
+                    # OBP caps ids at 36 chars, so a fresh UUID (not a suffix)
+                    # is the safe way to make a reused id unique.
+                    new_id = str(uuid.uuid4())
+                    while new_id in seen:
+                        new_id = str(uuid.uuid4())
+                    logger.warning(
+                        f"{ename}: example id '{cid}' already used by another entity; "
+                        f"using generated id '{new_id}' to avoid a collision"
+                    )
+                    cid = new_id
+                if isinstance(cid, str):
+                    seen.add(cid)
+                canonical[ename] = cid
                 break
     return canonical
 
 
-def build_payload(entity_name, wrap, canonical, entity_names, real_ids):
+def build_payload(entity_name, wrap, canonical, entity_names, real_ids, created):
     """Build a POST payload, resolving foreign keys to real ids.
 
-    `real_ids` maps an already-created entity -> the id OBP actually stored for
-    it. It is pre-seeded from `canonical` and upgraded to each create response's
-    id as objects are created (parents first), so an OBP-typed `reference:<x>`
-    field always points at a real, existing record of `<x>`.
+    `created` is the set of entities whose record already exists on OBP; only
+    those may be used as a `reference:<x>` target, because OBP validates that
+    the referenced record exists. `real_ids` supplies the id VALUE to use for a
+    created entity (its OBP id, or the canonical id OBP preserved). It is
+    pre-seeded from `canonical` and upgraded to each create response's id.
 
     Returns `(payload, references)`, where `references` is a list of
     `{field, target, resolution, value}` dicts describing every `reference:<x>`
@@ -210,22 +269,32 @@ def build_payload(entity_name, wrap, canonical, entity_names, real_ids):
         # OBP `reference:<entity>` foreign key -> the real id of that entity.
         ref = reference_target(declared)
         if ref is not None:
-            if real_ids.get(ref) is not None:
-                value = real_ids[ref]
-                resolution = "resolved"
+            is_optional = raw_key.endswith(" (optional)")
+            if ref in created:
+                val = real_ids.get(ref, canonical.get(ref))
+                payload[cf] = val
+                references.append(
+                    {"field": cf, "target": ref, "resolution": "resolved", "value": str(val)}
+                )
+            elif ref in entity_names and is_optional:
+                # Optional reference to one of our entities whose record does not
+                # exist yet (a forward or cyclic reference). Omit the field
+                # rather than post an invalid example id.
+                references.append(
+                    {"field": cf, "target": ref, "resolution": "deferred", "value": None}
+                )
             else:
                 # Reference to a static OBP entity (Bank, BankAccount, ...) or an
                 # entity we don't create here: fall back to the example value.
                 value = coerce_value(meta)
-                resolution = "fallback"
                 logger.warning(
                     f"{entity_name}.{cf}: reference target '{ref}' is not a created "
                     f"dynamic entity; using the spreadsheet example value"
                 )
-            payload[cf] = value
-            references.append(
-                {"field": cf, "target": ref, "resolution": resolution, "value": str(value)}
-            )
+                payload[cf] = value
+                references.append(
+                    {"field": cf, "target": ref, "resolution": "fallback", "value": str(value)}
+                )
             continue
 
         # Plain-string `<entity>_id` foreign key (not declared as a reference type).
@@ -274,7 +343,8 @@ def main():
     canonical = build_canonical_ids(entities)
     logger.info(f"Parsed {len(entities)} entities; {len(canonical)} have their own id field")
 
-    # Order: preferred first, then any remaining in spreadsheet order.
+    # Starting hint: preferred first, then any remaining in spreadsheet order.
+    # The fixpoint loop below reorders automatically so references resolve.
     ordered = [n for n in PREFERRED_ORDER if n in entities]
     ordered += [n for n in entities if n not in ordered]
 
@@ -284,50 +354,84 @@ def main():
     real_ids = dict(canonical)
 
     print_separator("-")
-    created = 0
-    failed = 0
-    for idx, ename in enumerate(ordered, 1):
-        wrap = entities[ename]
-        payload, references = build_payload(ename, wrap, canonical, entity_names, real_ids)
+    total = len(ordered)
+    created_names = set()
+    counters = {"created": 0, "failed": 0, "count": 0}
 
+    def _attempt(ename):
+        counters["count"] += 1
+        idx = counters["count"]
+        wrap = entities[ename]
+        payload, references = build_payload(ename, wrap, canonical, entity_names, real_ids, created_names)
         try:
             resp = create_object(ename, payload, token=args.token)
             obj = resp.get(ename, resp)
             obj_id = obj.get(f"{ename}_id", "<auto>")
             if obj.get(f"{ename}_id") is not None:
                 real_ids[ename] = obj[f"{ename}_id"]
-            logger.info(f"  ✓ [{idx}/{len(ordered)}] Created {ename} (id: {obj_id})")
-            created += 1
+            created_names.add(ename)
+            logger.info(f"  ✓ [{idx}/{total}] Created {ename} (id: {obj_id})")
+            counters["created"] += 1
             if log_enabled:
                 log_event(
-                    EVENT_CREATED,
-                    ename,
-                    entity_id=obj_id,
-                    status="success",
-                    message=f"Created {ename}",
-                    references=references,
-                    token=args.token,
+                    EVENT_CREATED, ename, entity_id=obj_id, status="success",
+                    message=f"Created {ename}", references=references, token=args.token,
                 )
         except requests.exceptions.HTTPError as e:
             detail = e.response.text if getattr(e, "response", None) is not None else str(e)
-            logger.error(f"  ✗ [{idx}/{len(ordered)}] Failed {ename}: {detail}")
-            failed += 1
+            logger.error(f"  ✗ [{idx}/{total}] Failed {ename}: {detail}")
+            counters["failed"] += 1
             if log_enabled:
                 log_event(
                     EVENT_FAILED, ename, status="error", message=detail,
                     references=references, token=args.token,
                 )
         except Exception as e:
-            logger.error(f"  ✗ [{idx}/{len(ordered)}] Failed {ename}: {e}")
-            failed += 1
+            logger.error(f"  ✗ [{idx}/{total}] Failed {ename}: {e}")
+            counters["failed"] += 1
             if log_enabled:
                 log_event(
                     EVENT_FAILED, ename, status="error", message=str(e),
                     references=references, token=args.token,
                 )
 
+    # Dependency-ordered creation. A record cannot reference an entity whose
+    # record does not exist yet, so:
+    #   Tier 1 - create any entity whose reference targets (required AND optional)
+    #            all already exist, so optional references resolve where possible.
+    #   Tier 2 - if a full pass places nothing, the remaining entities form a
+    #            cycle; create one whose REQUIRED targets exist (its unresolved
+    #            optional references are omitted, breaking the cycle), then retry.
+    pending = list(ordered)
+    while pending:
+        placed = [n for n in pending
+                  if all_ref_targets(n, entities[n], entity_names) <= created_names]
+        if placed:
+            placed_set = set(placed)
+            for ename in placed:
+                _attempt(ename)
+            pending = [n for n in pending if n not in placed_set]
+            continue
+        # Stalled: break the cycle on one entity whose required targets exist.
+        breakable = next(
+            (n for n in pending
+             if required_ref_targets(n, entities[n], entity_names) <= created_names),
+            None,
+        )
+        if breakable is None:
+            break  # remaining entities need required targets that never appeared
+        logger.warning(f"  ! {breakable}: reference cycle; omitting optional references")
+        _attempt(breakable)
+        pending = [n for n in pending if n != breakable]
+
+    # Anything still pending needs a required target that never got created;
+    # attempt once so the real OBP error is surfaced and logged.
+    for ename in pending:
+        logger.warning(f"  ! {ename}: required references unresolved; attempting anyway")
+        _attempt(ename)
+
     print_separator("-")
-    logger.info(f"Dummy Data Summary: {created} created, {failed} failed")
+    logger.info(f"Dummy Data Summary: {counters['created']} created, {counters['failed']} failed")
     print_separator("=")
 
 

@@ -239,6 +239,17 @@ def build_entity_definition_from_parsed(name, parsed_fields, has_personal=False,
                 )
                 prop_type = "number"
 
+        # A numeric field with a non-numeric example (e.g. an alphanumeric token
+        # id mistyped as integer): drop the bad example so the per-type default
+        # is used, rather than failing the whole entity. Booleans count as int.
+        if prop_type in ("integer", "number") and not isinstance(example_value, (int, float)):
+            if example_value not in (None, ""):
+                logger.warning(
+                    "%s.%s: declared %s but example %r is not numeric; using default",
+                    name, key, prop_type, example_value,
+                )
+            example_value = None
+
         # String and reference examples must be JSON strings. Stringify any
         # non-string example (e.g. a JSON object like {"id":...,"version":...}
         # that landed on a reference field) so OBP accepts it.

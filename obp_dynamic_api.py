@@ -105,8 +105,10 @@ def build_entity_definition_from_parsed(name, parsed_fields, has_personal=False,
             example_value = example
 
         declared_type = None
+        is_indexed = False
         if isinstance(example, dict):
             declared_type = example.get("value")
+            is_indexed = bool(example.get("indexed"))
 
         if isinstance(example_value, str):
             s = example_value.strip()
@@ -195,6 +197,13 @@ def build_entity_definition_from_parsed(name, parsed_fields, has_personal=False,
                 example_value = ""
 
         prop_def = {"type": prop_type}
+        # "Field Is Indexed" (column K in min_field_matrix.xlsx) is required for a
+        # field to be usable in OBP's ?obp_exists[Entity]/?obp_not_exists[Entity] and
+        # nested filter[...] queries. The sheet is the source of truth for this, not
+        # a type-based guess — a reference field without it can't be a join edge, and
+        # a scalar field without it can't be filtered inside a join predicate.
+        if is_indexed:
+            prop_def["indexed"] = True
         if example_value is not None and example_value != "":
             prop_def["example"] = example_value
         else:

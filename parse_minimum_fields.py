@@ -63,6 +63,9 @@ def parse_xlsx_entities(file_path):
 			# Column F (index 5) holds descriptions; Column G (index 6) holds examples
 			col_f_value = row.iloc[5] if len(row) > 5 and pd.notna(row.iloc[5]) else ""
 			col_g_value = row.iloc[6] if len(row) > 6 and pd.notna(row.iloc[6]) else ""
+			# Column K (index 10) holds "Field Is Indexed" — required for a field to be
+			# usable in OBP's ?obp_exists[Entity]/?obp_not_exists[Entity]/filter[...] queries.
+			col_k_value = row.iloc[10] if len(row) > 10 and pd.notna(row.iloc[10]) else ""
 
 			# Convert to string for processing (handle Excel dates safely)
 			col_a_str = str(col_a_value).strip()
@@ -70,6 +73,7 @@ def parse_xlsx_entities(file_path):
 			col_c_str = str(col_c_value).strip()
 			col_d_str = str(col_d_value).strip()
 			col_f_str = str(col_f_value).strip()
+			is_indexed = _has_green_checkmark(str(col_k_value).strip())
 			# If pandas read a datetime/timestamp, format as YYYY-MM-DD to match DATE_WITH_DAY
 			if col_g_value == "" or pd.isna(col_g_value):
 				col_g_str = ""
@@ -128,7 +132,7 @@ def parse_xlsx_entities(file_path):
 					if has_green_check_b:
 						# Column B has green check - add normally; preserve column D as value
 						# and attach column G as explicit example when available
-						entry = {"value": col_d_str}
+						entry = {"value": col_d_str, "indexed": is_indexed}
 						if cleaned_example:
 							entry["example"] = cleaned_example
 						if col_f_str:
@@ -137,7 +141,7 @@ def parse_xlsx_entities(file_path):
 					elif has_green_check_c:
 						# Column C has green check but not B - mark as optional
 						opt_key = f"{safe_key} (optional)"
-						entry = {"value": col_d_str}
+						entry = {"value": col_d_str, "indexed": is_indexed}
 						if cleaned_example:
 							entry["example"] = cleaned_example
 						if col_f_str:

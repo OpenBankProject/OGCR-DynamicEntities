@@ -152,3 +152,7 @@ python3 main.py
 
 If you want me to add example `.env` content, a quick test script, or adjust any parsing detail, tell me which part to update next.
 
+**Funding**
+
+The OGCR Project has received funding from the European Union's Horizon Europe programme under grant agreement 101218854.
+

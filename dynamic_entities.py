@@ -2,6 +2,7 @@ import requests
 import logging
 import json
 from obp_client import token, obp_host
+from obp_dynamic_api import tag_description_with_ogcr
 from dotenv import load_dotenv
 import os
 
@@ -58,6 +59,11 @@ def create_system_dynamic_entity(entity_definition, token=None):
 		dict: The API response
 	"""
 	url = f"{BASE_URL}/obp/v6.0.0/management/system-dynamic-entities"
+
+	# Ensure every entity description mentions OGCR so agents / LLM prompts can find it
+	definition = entity_definition.get("definition")
+	if isinstance(definition, dict):
+		definition["description"] = tag_description_with_ogcr(definition.get("description"))
 
 	headers = {
 		"Content-Type": "application/json"

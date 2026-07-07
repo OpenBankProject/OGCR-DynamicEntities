@@ -53,6 +53,32 @@ BUILTIN_REFERENCE_TYPES = {
 }
 
 
+# Every entity description must mention OGCR so that agents / LLM prompts can
+# find the OGCR entities by searching the OBP API catalogue (tags cannot be set
+# on dynamic entities; they are auto-derived from the entity name).
+OGCR_DESCRIPTION_TAG = "This Dynamic Entity is part of OGCR."
+
+
+def tag_description_with_ogcr(description):
+    """Return description with the OGCR marker appended, unless it already mentions OGCR."""
+    desc = (description or "").strip()
+    if "ogcr" in desc.lower():
+        return desc
+    if not desc:
+        return OGCR_DESCRIPTION_TAG
+    if not desc.endswith("."):
+        desc = desc + "."
+    return f"{desc} {OGCR_DESCRIPTION_TAG}"
+
+
+def _tag_entity_definition_with_ogcr(entity_definition):
+    """Append the OGCR marker to the schema description inside a legacy-format
+    payload ({<entity_name>: {description, required, properties}, ...})."""
+    for value in entity_definition.values():
+        if isinstance(value, dict) and "properties" in value:
+            value["description"] = tag_description_with_ogcr(value.get("description"))
+
+
 def list_system_dynamic_entities(token=None, base_url=None):
     """Return the management endpoint JSON for existing system dynamic entities."""
     token = token or DEFAULT_TOKEN
@@ -74,6 +100,8 @@ def create_system_dynamic_entity(entity_definition, token=None, base_url=None):
     token = token or DEFAULT_TOKEN
     base_url = base_url or DEFAULT_HOST
     url = f"{base_url}/obp/v5.1.0/management/system-dynamic-entities"
+
+    _tag_entity_definition_with_ogcr(entity_definition)
 
     headers = {"Content-Type": "application/json"}
     if token:
@@ -104,6 +132,8 @@ def update_system_dynamic_entity(dynamic_entity_id, entity_definition, token=Non
     token = token or DEFAULT_TOKEN
     base_url = base_url or DEFAULT_HOST
     url = f"{base_url}/obp/v5.1.0/management/system-dynamic-entities/{dynamic_entity_id}"
+
+    _tag_entity_definition_with_ogcr(entity_definition)
 
     headers = {"Content-Type": "application/json"}
     if token:
@@ -288,7 +318,8 @@ def build_entity_definition_from_parsed(name, parsed_fields, has_personal=False,
         if not optional:
             required.append(key)
 
-    entity_def_description = entity_description if entity_description is not None else f"Parsed entity {name}"
+    entity_def_description = tag_description_with_ogcr(
+        entity_description if entity_description is not None else f"Parsed entity {name}")
     entity_definition = {
         "hasPersonalEntity": bool(has_personal),
         "hasCommunityAccess": bool(has_community),

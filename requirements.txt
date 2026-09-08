@@ -1,7 +1,7 @@
 requests==2.31.0
 python-dotenv==1.0.0
 
-# Added for parsing Excel files
-pandas==1.5.3
+# Added for parsing Excel files (pandas 1.5 / numpy 1.24 have no wheels for Python 3.12)
+pandas>=2.2,<3
 openpyxl==3.1.2
-numpy==1.24.4
+numpy>=1.26,<2

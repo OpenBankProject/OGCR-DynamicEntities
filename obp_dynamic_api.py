@@ -59,6 +59,42 @@ BUILTIN_REFERENCE_TYPES = {
 OGCR_DESCRIPTION_TAG = "This Dynamic Entity is part of OGCR."
 
 
+
+# ---------------------------------------------------------------------------
+# DE_indexing policy: which properties get `"indexed": true`.
+#
+# OBP only lets *indexed* fields be used in a list endpoint's filter/sort query
+# parameters, and a `reference:<Entity>` field must be indexed to act as a
+# one-hop join edge (`?obp_exists[child]=...` / `?obp_not_exists[child]=...`).
+# Without these flags a join such as
+#   GET /obp/dynamic-entity/activity?obp_exists[activity_verification]=filter[status_code]=eq:verified
+# is rejected with HTTP 400. The spreadsheet has no column for this, so the
+# policy lives here and applies to every entity built from it:
+#   * every reference:<Entity> field (join edges), also when it is temporarily
+#     downgraded to a string in pass 1 of the two-pass create;
+#   * the entity's own id field (<entity>_id), so the parent side of a join has
+#     at least one indexed field;
+#   * a small allow-list of status/lookup fields used as join predicates.
+# `json` fields are never indexed here: OBP requires index:spatial for those.
+# ---------------------------------------------------------------------------
+ALWAYS_INDEX_FIELD_NAMES = {"status_code"}
+
+
+def should_index_field(entity_name, field_name, prop_type, declared_type=None):
+    """Return True when `field_name` on `entity_name` should carry "indexed": true."""
+    if prop_type == "json":
+        return False
+    if isinstance(declared_type, str) and declared_type.strip().startswith("reference:"):
+        return True
+    if isinstance(prop_type, str) and prop_type.startswith("reference:"):
+        return True
+    if field_name in ALWAYS_INDEX_FIELD_NAMES:
+        return True
+    # <entity>_id, tolerating an OBP_ENTITY_PREFIX on the entity name.
+    if field_name.endswith("_id") and entity_name.endswith(field_name[:-3]):
+        return True
+    return False
+
 def tag_description_with_ogcr(description):
     """Return description with the OGCR marker appended, unless it already mentions OGCR."""
     desc = (description or "").strip()
@@ -313,6 +349,9 @@ def build_entity_definition_from_parsed(name, parsed_fields, has_personal=False,
                 prop_def["description"] = str(example.get("description"))
             except Exception:
                 prop_def["description"] = ""
+
+        if should_index_field(name, key, prop_type, declared_type):
+            prop_def["indexed"] = True
 
         properties[key] = prop_def
         if not optional:

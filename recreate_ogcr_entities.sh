@@ -23,6 +23,10 @@ set -euo pipefail
 # Run from the directory this script lives in, so relative paths resolve.
 cd "$(dirname "$0")"
 
+# Prefer the project virtualenv if it exists (has pandas/openpyxl installed).
+if [ -z "${PYTHON:-}" ] && [ -x ".venv/bin/python" ]; then
+  PYTHON=".venv/bin/python"
+fi
 PYTHON="${PYTHON:-python3}"
 MATRIX="${1:-min_field_matrix.xlsx}"
 ENTITY_LIST="entities_output.txt"

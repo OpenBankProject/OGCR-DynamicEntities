@@ -15,7 +15,9 @@ How it works:
        - its own `<entity>_id`        -> the canonical id for this entity
        - any `<other_entity>_id` field -> the canonical id of that other entity
        - `compliance_certificate_id`   -> certificate_of_compliance's id (alias)
-  4. POST one object per entity.
+  4. POST one object per entity - except entities listed in `fixtures.py`,
+     which are controlled vocabularies: for those, POST the full fixed list of
+     rows instead of a single example, skipping any already present.
 
 Usage:
     python3 create_dummy_data.py [path/to/min_field_matrix.xlsx] [--token TOKEN]
@@ -31,6 +33,7 @@ import requests
 
 from obp_client import token as default_token, obp_host
 from parse_minimum_fields import parse_xlsx_entities
+from fixtures import fixture_records, resolve_name_field
 from ogcr_log_entity import (
     ensure_log_entity,
     log_event,
@@ -307,6 +310,27 @@ def build_payload(entity_name, wrap, canonical, entity_names, real_ids, created)
     return payload, references
 
 
+def existing_object_ids(entity_name, token=None):
+    """Ids already stored for `entity_name`, so fixture rows are not duplicated.
+
+    Returns an empty set if the table cannot be read (entity missing, API
+    error): the caller then simply attempts every fixture row.
+    """
+    url = f"{BASE_URL}/obp/dynamic-entity/{entity_name}"
+    headers = {}
+    if token:
+        headers["Authorization"] = f"DirectLogin token={token}"
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        rows = response.json().get(f"{entity_name}_list", [])
+    except Exception as e:
+        logger.warning(f"{entity_name}: could not list existing objects ({e}); assuming none")
+        return set()
+    id_field = f"{entity_name}_id"
+    return {r[id_field] for r in rows if isinstance(r, dict) and r.get(id_field)}
+
+
 def create_object(entity_name, data, token=None):
     url = f"{BASE_URL}/obp/dynamic-entity/{entity_name}"
     headers = {"Content-Type": "application/json"}
@@ -322,6 +346,7 @@ def main():
     parser.add_argument("file", nargs="?", default=DEFAULT_SPREADSHEET, help=f"Spreadsheet path (default: {DEFAULT_SPREADSHEET}).")
     parser.add_argument("--token", default=default_token, help="DirectLogin token (overrides obp_client.py).")
     parser.add_argument("--no-log", action="store_true", help=f"Do not record creation/errors/fallbacks in the {LOG_ENTITY_NAME} dynamic entity.")
+    parser.add_argument("--fixtures-only", action="store_true", help="Only write the controlled vocabularies from fixtures.py, leaving every other entity untouched. Rows already present are skipped, so this tops up a partially populated table.")
     args = parser.parse_args()
 
     logger.info("Starting Dummy Data Creation Script")
@@ -348,6 +373,15 @@ def main():
     ordered = [n for n in PREFERRED_ORDER if n in entities]
     ordered += [n for n in entities if n not in ordered]
 
+    # --fixtures-only: top up the controlled vocabularies without touching (or
+    # duplicating) the single example rows of every other entity.
+    if args.fixtures_only:
+        ordered = [n for n in ordered if fixture_records(n)]
+        if not ordered:
+            logger.error("No fixtured entities found in the spreadsheet")
+            return
+        logger.info(f"--fixtures-only: {', '.join(ordered)}")
+
     # Real ids of created objects, used to resolve `reference:` foreign keys.
     # Seeded from canonical (OBP preserves supplied `<entity>_id` values) and
     # upgraded to the id OBP actually returns after each successful create.
@@ -356,9 +390,90 @@ def main():
     print_separator("-")
     total = len(ordered)
     created_names = set()
-    counters = {"created": 0, "failed": 0, "count": 0}
+    counters = {"created": 0, "failed": 0, "skipped": 0, "count": 0}
+
+    def _attempt_fixture(ename):
+        """Create the controlled-vocabulary rows for `ename` from `fixtures.py`.
+
+        Rows whose id is already stored are left alone, so the script can be
+        re-run against a populated instance without duplicating or erroring.
+        The entity counts as created once at least one fixture row is present,
+        and referencing entities resolve to the first fixture id.
+        """
+        counters["count"] += 1
+        idx = counters["count"]
+        rows = fixture_records(ename)
+        id_field = f"{ename}_id"
+        # The display-name field differs per entity (`name`, `country_name`, ...).
+        sheet_fields = {clean_key(k) for k in entities[ename].get("fields", {})}
+        name_field = resolve_name_field(ename, sheet_fields)
+        if name_field is None:
+            logger.warning(f"  ! {ename}: no name field in the sheet; writing fixture ids only")
+        already = existing_object_ids(ename, token=args.token)
+        extra = already - {fid for fid, _ in rows}
+        if extra:
+            logger.warning(
+                f"  ! {ename}: {len(extra)} stored row(s) are not in the fixture "
+                f"(e.g. {sorted(extra)[0]}); leaving them in place"
+            )
+        present = already & {fid for fid, _ in rows}
+        created_here = failed_here = skipped_here = 0
+        for fixture_id, display_name in rows:
+            if fixture_id in already:
+                skipped_here += 1
+                counters["skipped"] += 1
+                continue
+            # Build from the spreadsheet so any other field keeps its declared
+            # type and example, then pin the id and name from the fixture.
+            payload, references = build_payload(ename, entities[ename], canonical, entity_names, real_ids, created_names)
+            payload[id_field] = fixture_id
+            if name_field:
+                payload[name_field] = display_name
+            try:
+                create_object(ename, payload, token=args.token)
+                present.add(fixture_id)
+                created_here += 1
+                counters["created"] += 1
+                if log_enabled:
+                    log_event(
+                        EVENT_CREATED, ename, entity_id=fixture_id, status="success",
+                        message=f"Created {ename} fixture {fixture_id}",
+                        references=references, token=args.token,
+                    )
+            except requests.exceptions.HTTPError as e:
+                detail = e.response.text if getattr(e, "response", None) is not None else str(e)
+                logger.error(f"  ✗ Failed {ename} fixture {fixture_id}: {detail}")
+                failed_here += 1
+                counters["failed"] += 1
+                if log_enabled:
+                    log_event(
+                        EVENT_FAILED, ename, entity_id=fixture_id, status="error",
+                        message=detail, references=references, token=args.token,
+                    )
+            except Exception as e:
+                logger.error(f"  ✗ Failed {ename} fixture {fixture_id}: {e}")
+                failed_here += 1
+                counters["failed"] += 1
+                if log_enabled:
+                    log_event(
+                        EVENT_FAILED, ename, entity_id=fixture_id, status="error",
+                        message=str(e), references=references, token=args.token,
+                    )
+        if present:
+            # Foreign keys to this entity point at the first fixture row.
+            real_ids[ename] = rows[0][0] if rows[0][0] in present else sorted(present)[0]
+            created_names.add(ename)
+        logger.info(
+            f"  ✓ [{idx}/{total}] Fixture {ename}: {created_here} created, "
+            f"{skipped_here} already present, {failed_here} failed "
+            f"({len(rows)} defined)"
+        )
 
     def _attempt(ename):
+        # Controlled vocabularies get their full fixed list, not one example row.
+        if fixture_records(ename):
+            _attempt_fixture(ename)
+            return
         counters["count"] += 1
         idx = counters["count"]
         wrap = entities[ename]
@@ -431,7 +546,10 @@ def main():
         _attempt(ename)
 
     print_separator("-")
-    logger.info(f"Dummy Data Summary: {counters['created']} created, {counters['failed']} failed")
+    logger.info(
+        f"Dummy Data Summary: {counters['created']} created, "
+        f"{counters['skipped']} already present, {counters['failed']} failed"
+    )
     print_separator("=")
 
 

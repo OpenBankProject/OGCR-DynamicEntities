@@ -6,6 +6,7 @@ with column A as keys and column D as values.
 """
 
 import pandas as pd
+import re
 import sys
 from pathlib import Path
 from obp_dynamic_api import create_dynamic_entity_from_parsed
@@ -34,6 +35,35 @@ def _has_green_checkmark(cell_value):
 	return any(mark in cell_upper for mark in checkmarks)
 
 
+# Header of the entity-level column that opens public (unauthenticated) read
+# access. It is matched by header text rather than position, so the column can
+# live anywhere; spelling drift (case, spaces, the OBP flag name) is tolerated.
+PUBLIC_ACCESS_HEADERS = {
+	"entityhaspublicaccess",
+	"entityhaspublicread",
+	"haspublicaccess",
+	"publicreadaccess",
+	"publicaccess",
+}
+
+
+def _normalise_header(value):
+	"""Lowercase a header and drop spaces/underscores for tolerant matching."""
+	return re.sub(r"[\s_]+", "", str(value)).strip().lower()
+
+
+def _find_public_access_column(df):
+	"""Index of the EntityHasPublicAccess column, or None when absent.
+
+	Absent is normal (an older export): every entity then defaults to not
+	public, which is what OBP does when the flag is omitted.
+	"""
+	for idx, header in enumerate(df.columns):
+		if _normalise_header(header) in PUBLIC_ACCESS_HEADERS:
+			return idx
+	return None
+
+
 def parse_xlsx_entities(file_path):
 	"""
 	Parse xlsx file to extract entity dictionaries.
@@ -52,6 +82,10 @@ def parse_xlsx_entities(file_path):
 		entities = {}
 		current_entity = None
 		current_dict = {}
+		# Entity-level public-read flag, read from the EntityHasPublicAccess
+		# column on each `Entity: <name>` row (absent column -> always False).
+		public_access_col = _find_public_access_column(df)
+		current_entity_public = False
 
 		# Iterate through rows
 		for index, row in df.iterrows():
@@ -101,12 +135,21 @@ def parse_xlsx_entities(file_path):
 			if col_a_str.lower().startswith("entity:"):
 				# Save previous entity if exists
 				if current_entity and current_dict:
-					entities[current_entity] = {"description": current_entity_description, "fields": current_dict}
+					entities[current_entity] = {
+						"description": current_entity_description,
+						"public_access": current_entity_public,
+						"fields": current_dict,
+					}
 
 				# Start new entity
 				entity_name = col_a_str[7:].strip()  # Remove "entity:" prefix
 				current_entity = entity_name
 				current_dict = {}
+				# Public read access is declared on the entity row, not per field.
+				current_entity_public = False
+				if public_access_col is not None and len(row) > public_access_col:
+					flag = row.iloc[public_access_col]
+					current_entity_public = _has_green_checkmark(str(flag)) if pd.notna(flag) else False
 				# capture entity-level description from column F when present
 				current_entity_description = col_f_str if col_f_str else f"Parsed entity {entity_name}"
 
@@ -147,7 +190,11 @@ def parse_xlsx_entities(file_path):
 
 		# Save the last entity if exists
 		if current_entity and current_dict:
-			entities[current_entity] = {"description": current_entity_description, "fields": current_dict}
+			entities[current_entity] = {
+				"description": current_entity_description,
+				"public_access": current_entity_public,
+				"fields": current_dict,
+			}
 
 		return entities
 
@@ -195,7 +242,8 @@ def _create_entities_two_pass(entities, token=None, host=None, has_personal=Fals
 	for entity_name, wrapper in entities.items():
 		fields = wrapper.get("fields") if isinstance(wrapper, dict) else wrapper
 		description = wrapper.get("description") if isinstance(wrapper, dict) else None
-		print(f"Processing entity: {entity_name} ...")
+		public_access = wrapper.get("public_access", False) if isinstance(wrapper, dict) else False
+		print(f"Processing entity: {entity_name}{' (public read)' if public_access else ''} ...")
 		try:
 			resp = create_dynamic_entity_from_parsed(
 				entity_name,
@@ -204,6 +252,7 @@ def _create_entities_two_pass(entities, token=None, host=None, has_personal=Fals
 				base_url=host,
 				has_personal=has_personal,
 				has_community=has_community,
+				has_public=public_access,
 				entity_description=description,
 				downgrade_references=True,
 			)
@@ -229,6 +278,7 @@ def _create_entities_two_pass(entities, token=None, host=None, has_personal=Fals
 		wrapper = entities[entity_name]
 		fields = wrapper.get("fields") if isinstance(wrapper, dict) else wrapper
 		description = wrapper.get("description") if isinstance(wrapper, dict) else None
+		public_access = wrapper.get("public_access", False) if isinstance(wrapper, dict) else False
 		dyn_id = created_ids.get(entity_name) or get_dynamic_entity_id_by_name(entity_name, token=token, base_url=host)
 		if not dyn_id or dyn_id == "<no-id>":
 			print(f"  Skipping references for {entity_name}: entity was not created")
@@ -239,6 +289,7 @@ def _create_entities_two_pass(entities, token=None, host=None, has_personal=Fals
 				fields,
 				has_personal=has_personal,
 				has_community=has_community,
+				has_public=public_access,
 				entity_description=description,
 				allowed_reference_types=allowed_refs,
 			)
@@ -342,13 +393,15 @@ def main():
 			print(f"Processing entity: {entity_name} ...")
 			try:
 				entity_description = entity_wrapper.get("description") if isinstance(entity_wrapper, dict) else None
+				public_access = entity_wrapper.get("public_access", False) if isinstance(entity_wrapper, dict) else False
 				fields = entity_wrapper.get("fields") if isinstance(entity_wrapper, dict) else entity_wrapper
 				dynamic_id = get_dynamic_entity_id_by_name(entity_name, token=args.token, base_url=args.host)
 				if not dynamic_id:
 					print(f"No existing dynamic entity found for '{entity_name}', skipping update.")
 					continue
 				entity_def = build_entity_definition_from_parsed(
-					entity_name, fields, entity_description=entity_description,
+					entity_name, fields, has_public=public_access,
+					entity_description=entity_description,
 					allowed_reference_types=allowed_refs,
 				)
 				resp = update_system_dynamic_entity(dynamic_id, entity_def, token=args.token, base_url=args.host)

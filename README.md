@@ -113,6 +113,51 @@ Notes:
 - It creates **one record per entity**. To create more (e.g. several parcels under one activity), extend the payload loop in `main()`.
 - It is fully spreadsheet-driven — it does **not** use the hardcoded entities in `dynamic_entities.py`.
 
+**Public read access (`EntityHasPublicAccess`)**
+
+An entity can be opened for unauthenticated read — useful for open reference data such as the country list. Tick the **`EntityHasPublicAccess`** column (column Q) on the entity's `Entity: <name>` row in the spreadsheet; leave the field rows blank, because the flag is entity-level, not per field. `TRUE`, `1`, `Y` or a checkmark all count; blank or `FALSE` means not public.
+
+The parser finds the column by *header text*, not position, so it can be moved and minor spelling differences (`hasPublicAccess`, `Entity Has Public Access`) still match. If the column is missing entirely — an older export — every entity simply defaults to not public.
+
+A ticked entity is created with `"hasPublicAccess": true`, which gives it an extra route:
+
+| Route | Who | What |
+|---|---|---|
+| `GET /obp/dynamic-entity/public/<entity>` | anyone, **no login** | read only, shared-pool rows only |
+| `GET /obp/dynamic-entity/<entity>` | role holders | unchanged; 401 without authentication |
+| any write to `/public/` | — | 404; there is no public write route |
+
+The flag is only sent when it is switched on, so an OBP build that predates it is unaffected. See the `Dynamic-Entity-Access-Model` glossary entry on your OBP instance for the full access model (`hasPersonalEntity`, `hasCommunityAccess`, `useRowLevelAccess`, `authMode` and field-level roles); this flag is its "curated reference data" pattern — role holders maintain the data, everyone reads it.
+
+Currently ticked: `country`, `technologies_practices_processes`.
+
+**Fixtures (controlled vocabularies)**
+
+Some entities are not examples but fixed lists of values the rest of the system selects from. These live in `fixtures.py`, not in the spreadsheet, and `create_dummy_data.py` writes the whole list instead of a single example row — so every run of `recreate_ogcr_entities.sh` ends with exactly those rows present.
+
+Currently fixtured:
+- **`technologies_practices_processes`** — the 28 technologies/practices/processes an activity can declare. Ids are `UPPERCASE_WITH_UNDERSCORES` and the label is derived from the id in proper case, with acronyms in `fixtures.ACRONYMS` left uppercase (`GEOLOGICAL_CO2_STORAGE` → `Geological CO2 Storage`, `..._BECCS` → `... BECCS`).
+- **`country`** — all 249 ISO 3166-1 alpha-2 codes, in `iso_3166_1_countries.py`. The id is the two-letter code (`DE`) and the label is the ISO English **short name** (`Germany`). A handful read formally (`Korea, Republic of`, `Taiwan, Province of China`); each carries a `# commonly:` comment if you prefer the common name. The module header has the one-liner that regenerates it from the system `iso-codes` package.
+
+How a fixture is written:
+- The id goes in `<entity>_id`. OBP preserves a supplied `<entity>_id`, so these codes are the stable keys other records reference.
+- The label goes in the entity's name field, resolved per entity by `fixtures.resolve_name_field`: `name`, else `<entity>_name`, else the sheet's only other `*_name` field (this is how `technologies_practices_processes.practice_name` is found). If the sheet has several `*_name` fields the choice is ambiguous, so ids are written without a label and a warning is logged.
+- Any *other* field the sheet declares for that entity keeps its spreadsheet example and declared type.
+- Rows already stored are skipped, so the script is safe to re-run against a populated instance.
+- Stored rows that are *not* in the fixture list are logged as a warning and left in place (a full recreate wipes them anyway).
+
+Topping up an existing instance:
+
+```bash
+python3 create_dummy_data.py --fixtures-only     # writes only the fixtured entities
+```
+
+`--fixtures-only` skips every non-fixtured entity, so it will not duplicate (or error on) the single example rows those already have. Combined with the skip-if-present behaviour, it is the way to add newly defined fixture values, or to retry rows that failed, without a full wipe-and-recreate.
+
+> **Id length:** OBP stores `<entity>_id` as `varchar(36)`, so a fixture id longer than 36 characters is rejected with `OBP-50015 ... value too long for type character varying(36)`. Either shorten the id — the display name is independent, so use the `(id, name)` form to keep the full wording — or widen the column on the OBP side.
+
+To add a value, add it to the list in `fixtures.py`. To fixture another entity, add an `entity_name: [rows]` pair to `FIXTURES`, where a row is either a bare id (label derived) or an explicit `(id, label)` pair.
+
 **`main.py` — Usage**
 - Run the management workflow (delete objects, delete entity definitions, recreate entities):
 

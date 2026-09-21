@@ -215,7 +215,7 @@ def get_existing_entity_names(token=None, base_url=None):
     return names
 
 
-def build_entity_definition_from_parsed(name, parsed_fields, has_personal=False, has_community=False, entity_description=None,
+def build_entity_definition_from_parsed(name, parsed_fields, has_personal=False, has_community=False, has_public=False, entity_description=None,
                                         allowed_reference_types=None, downgrade_references=False):
     """Build and return a dynamic-entity payload dict from parsed_fields without making API calls.
 
@@ -368,14 +368,19 @@ def build_entity_definition_from_parsed(name, parsed_fields, has_personal=False,
             "properties": properties,
         }
     }
+    # hasPublicAccess opens GET /obp/dynamic-entity/public/<name> to anyone with
+    # no login (read only; the shared pool only). Sent only when switched on, so
+    # an OBP build that predates the flag is unaffected.
+    if has_public:
+        entity_definition["hasPublicAccess"] = True
     return entity_definition
 
 
-def create_dynamic_entity_from_parsed(name, parsed_fields, token=None, base_url=None, has_personal=False, has_community=False, entity_description=None,
+def create_dynamic_entity_from_parsed(name, parsed_fields, token=None, base_url=None, has_personal=False, has_community=False, has_public=False, entity_description=None,
                                       allowed_reference_types=None, downgrade_references=False):
     """Create a dynamic entity using parsed fields by building the payload and POSTing it."""
     entity_definition = build_entity_definition_from_parsed(
-        name, parsed_fields, has_personal=has_personal, has_community=has_community, entity_description=entity_description,
+        name, parsed_fields, has_personal=has_personal, has_community=has_community, has_public=has_public, entity_description=entity_description,
         allowed_reference_types=allowed_reference_types, downgrade_references=downgrade_references)
 
     # If entity with same name already exists, return existing id instead of creating

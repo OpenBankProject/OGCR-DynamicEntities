@@ -27,7 +27,6 @@ import argparse
 import json
 import logging
 import re
-import uuid
 
 import requests
 
@@ -213,32 +212,23 @@ def all_ref_targets(entity_name, wrap, entity_names):
 def build_canonical_ids(entities):
     """Canonical id per entity that owns a `<entity>_id` field.
 
-    OBP preserves a supplied `<entity>_id` and uses it as a globally-unique key,
-    so if the spreadsheet reuses the same placeholder id (e.g. one UUID pasted
-    as the example id for several entities) later creates collide. De-duplicate
-    by suffixing the entity name onto any id already claimed by another entity.
+    OBP preserves a supplied `<entity>_id` and uses it as the record's key. That
+    key is unique within one space and one entity, not across the instance: the
+    unique index is (bank_id, entity_name, record_id). Two entities may therefore
+    each hold a record called `sample`, and two spaces may each hold `country/FR`,
+    which is what makes natural keys usable here at all.
+
+    This used to substitute a fresh UUID whenever the spreadsheet reused an
+    example id across entities, because the old index made an id unique
+    instance-wide and the second create failed. That is no longer true, so the
+    spreadsheet's own ids are kept and the fixtures say what the spreadsheet says.
     """
     canonical = {}
-    seen = set()
     for ename, wrap in entities.items():
         fields = wrap.get("fields", {})
         for raw_key, meta in fields.items():
             if clean_key(raw_key) == f"{ename}_id":
-                cid = coerce_value(meta)
-                if isinstance(cid, str) and cid in seen:
-                    # OBP caps ids at 36 chars, so a fresh UUID (not a suffix)
-                    # is the safe way to make a reused id unique.
-                    new_id = str(uuid.uuid4())
-                    while new_id in seen:
-                        new_id = str(uuid.uuid4())
-                    logger.warning(
-                        f"{ename}: example id '{cid}' already used by another entity; "
-                        f"using generated id '{new_id}' to avoid a collision"
-                    )
-                    cid = new_id
-                if isinstance(cid, str):
-                    seen.add(cid)
-                canonical[ename] = cid
+                canonical[ename] = coerce_value(meta)
                 break
     return canonical
 
@@ -410,15 +400,19 @@ def main():
         if name_field is None:
             logger.warning(f"  ! {ename}: no name field in the sheet; writing fixture ids only")
         already = existing_object_ids(ename, token=args.token)
-        extra = already - {fid for fid, _ in rows}
+        extra = already - {fid for fid, _, _ in rows}
         if extra:
             logger.warning(
                 f"  ! {ename}: {len(extra)} stored row(s) are not in the fixture "
                 f"(e.g. {sorted(extra)[0]}); leaving them in place"
             )
-        present = already & {fid for fid, _ in rows}
+        present = already & {fid for fid, _, _ in rows}
+        # Extra fixture fields (e.g. an SDG's link) the sheet does not define.
+        undefined = sorted({f for _, _, fields in rows for f in fields} - sheet_fields)
+        if undefined:
+            logger.warning(f"  ! {ename}: sheet has no field(s) {', '.join(undefined)}; skipping them")
         created_here = failed_here = skipped_here = 0
-        for fixture_id, display_name in rows:
+        for fixture_id, display_name, extra_fields in rows:
             if fixture_id in already:
                 skipped_here += 1
                 counters["skipped"] += 1
@@ -429,6 +423,9 @@ def main():
             payload[id_field] = fixture_id
             if name_field:
                 payload[name_field] = display_name
+            for field, value in extra_fields.items():
+                if field in sheet_fields:
+                    payload[field] = value
             try:
                 create_object(ename, payload, token=args.token)
                 present.add(fixture_id)

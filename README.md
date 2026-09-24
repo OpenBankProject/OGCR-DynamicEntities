@@ -138,10 +138,12 @@ Some entities are not examples but fixed lists of values the rest of the system 
 Currently fixtured:
 - **`technologies_practices_processes`** — the 28 technologies/practices/processes an activity can declare. Ids are `UPPERCASE_WITH_UNDERSCORES` and the label is derived from the id in proper case, with acronyms in `fixtures.ACRONYMS` left uppercase (`GEOLOGICAL_CO2_STORAGE` → `Geological CO2 Storage`, `..._BECCS` → `... BECCS`).
 - **`country`** — all 249 ISO 3166-1 alpha-2 codes, in `iso_3166_1_countries.py`. The id is the two-letter code (`DE`) and the label is the ISO English **short name** (`Germany`). A handful read formally (`Korea, Republic of`, `Taiwan, Province of China`); each carries a `# commonly:` comment if you prefer the common name. The module header has the one-liner that regenerates it from the system `iso-codes` package.
+- **`sustainable_development_goal`** — the 17 UN Sustainable Development Goals, in `sustainable_development_goals.py`, transcribed from the "SDGs enum" sheet of `SDG_enum.xlsx`. The id is e.g. `NO_POVERTY`, the label `No Poverty`, and the goal's icon URL goes in `sustainable_development_goal_link`. The goal number (`GOAL_1`) is carried as `sustainable_development_goal_number`, which the entity does not define yet, so it is skipped with a warning until that field is added to the sheet.
 
 How a fixture is written:
 - The id goes in `<entity>_id`. OBP preserves a supplied `<entity>_id`, so these codes are the stable keys other records reference.
 - The label goes in the entity's name field, resolved per entity by `fixtures.resolve_name_field`: `name`, else `<entity>_name`, else the sheet's only other `*_name` field (this is how `technologies_practices_processes.practice_name` is found). If the sheet has several `*_name` fields the choice is ambiguous, so ids are written without a label and a warning is logged.
+- Extra fields given in an `(id, label, {field: value})` row are written as-is when the sheet declares that field, and skipped with a warning when it does not.
 - Any *other* field the sheet declares for that entity keeps its spreadsheet example and declared type.
 - Rows already stored are skipped, so the script is safe to re-run against a populated instance.
 - Stored rows that are *not* in the fixture list are logged as a warning and left in place (a full recreate wipes them anyway).
@@ -154,9 +156,9 @@ python3 create_dummy_data.py --fixtures-only     # writes only the fixtured enti
 
 `--fixtures-only` skips every non-fixtured entity, so it will not duplicate (or error on) the single example rows those already have. Combined with the skip-if-present behaviour, it is the way to add newly defined fixture values, or to retry rows that failed, without a full wipe-and-recreate.
 
-> **Id length:** OBP stores `<entity>_id` as `varchar(36)`, so a fixture id longer than 36 characters is rejected with `OBP-50015 ... value too long for type character varying(36)`. Either shorten the id — the display name is independent, so use the `(id, name)` form to keep the full wording — or widen the column on the OBP side.
+> **Id length:** the `<entity>_id` column is a `varchar` whose width is set by the OBP deployment, so the ceiling is instance-specific. An id that exceeds it is rejected with `OBP-50015 ... value too long for type character varying(N)`. The OBP default has been `varchar(36)`; this project's instance was widened to `varchar(255)`. If you hit the error against a narrower instance, shorten the id — the display name is independent, so use the `(id, name)` form to keep the full wording — rather than assuming every instance has the wider column.
 
-To add a value, add it to the list in `fixtures.py`. To fixture another entity, add an `entity_name: [rows]` pair to `FIXTURES`, where a row is either a bare id (label derived) or an explicit `(id, label)` pair.
+To add a value, add it to the list in `fixtures.py`. To fixture another entity, add an `entity_name: [rows]` pair to `FIXTURES`, where a row is either a bare id (label derived), an explicit `(id, label)` pair, or an `(id, label, {field: value})` triple for extra fields.
 
 **`main.py` — Usage**
 - Run the management workflow (delete objects, delete entity definitions, recreate entities):

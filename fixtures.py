@@ -11,10 +11,14 @@ A fixture is a list of rows for one entity. A row is either:
     (`COVER_CROPPING` -> `Cover Cropping`), for vocabularies we coin ourselves,
     where the convention is UPPERCASE_WITH_UNDERSCORES; or
   * an `(id, name)` pair - for external code lists such as ISO 3166-1, where
-    the name cannot be derived from the code (`DE` -> `Germany`).
+    the name cannot be derived from the code (`DE` -> `Germany`); or
+  * an `(id, name, {field: value})` triple - when the list carries more than a
+    label, e.g. the SDG icon link. Extra fields the sheet does not define are
+    skipped with a warning.
 """
 
 from iso_3166_1_countries import COUNTRIES
+from sustainable_development_goals import SUSTAINABLE_DEVELOPMENT_GOALS
 
 # Acronyms that must not be title-cased when deriving a name from an id.
 ACRONYMS = {"DACS", "BECCS", "CO2"}
@@ -65,6 +69,14 @@ FIXTURES = {
     "technologies_practices_processes": TECHNOLOGIES_PRACTICES_PROCESSES_IDS,
     # ISO 3166-1 alpha-2 is the code OGCR uses for every country reference.
     "country": COUNTRIES,
+    # The 17 UN Sustainable Development Goals (see sustainable_development_goals.py).
+    "sustainable_development_goal": [
+        (goal_id, name, {
+            "sustainable_development_goal_number": number,
+            "sustainable_development_goal_link": icon_url,
+        })
+        for goal_id, number, name, icon_url in SUSTAINABLE_DEVELOPMENT_GOALS
+    ],
 }
 
 # Preferred names for the field holding a row's human-readable label, most
@@ -89,11 +101,11 @@ def resolve_name_field(entity_name, sheet_fields):
 
 
 def fixture_records(entity_name):
-    """`[(id, name), ...]` for `entity_name`, or `[]` when it has no fixture."""
+    """`[(id, name, extra_fields), ...]` for `entity_name`, or `[]` when it has no fixture."""
     rows = []
     for row in FIXTURES.get(entity_name, []):
         if isinstance(row, (tuple, list)):
-            rows.append((row[0], row[1]))
+            rows.append((row[0], row[1], dict(row[2]) if len(row) > 2 else {}))
         else:
-            rows.append((row, proper_case_name(row)))
+            rows.append((row, proper_case_name(row), {}))
     return rows

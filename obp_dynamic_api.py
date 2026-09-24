@@ -207,8 +207,12 @@ def get_existing_entity_names(token=None, base_url=None):
     try:
         existing = list_system_dynamic_entities(token=token, base_url=base_url)
         for e in existing.get("dynamic_entities", []):
-            for k in e.keys():
-                if k not in ("hasPersonalEntity", "hasCommunityAccess", "dynamicEntityId", "userId"):
+            # The entity name is the only key whose value is the definition object;
+            # every wrapper key (hasPersonalEntity, hasPublicAccess, bankId, userId,
+            # dynamicEntityId, ...) holds a scalar. Testing the value rather than
+            # blacklisting names keeps this correct as OBP adds wrapper flags.
+            for k, v in e.items():
+                if isinstance(v, dict):
                     names.add(k)
     except Exception:
         pass

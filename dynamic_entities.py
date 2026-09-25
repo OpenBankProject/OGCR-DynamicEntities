@@ -474,7 +474,8 @@ def add_entitlement_to_user(token, user_id, role_name, bank_id=""):
 	Returns:
 		Response JSON from the API
 	"""
-	url = f"{BASE_URL}/obp/v6.0.0/users/{user_id}/entitlements"
+	# v7.0.0: the older versions reject the SYS bank id with OBP-30001 Bank not found.
+	url = f"{BASE_URL}/obp/v7.0.0/users/{user_id}/entitlements"
 	headers = {
 		"Authorization": f"DirectLogin token={token}",
 		"Content-Type": "application/json"
@@ -489,7 +490,7 @@ def add_entitlement_to_user(token, user_id, role_name, bank_id=""):
 		response = requests.post(url, headers=headers, json=data)
 	except requests.exceptions.RequestException as e:
 		logger.error(f"Error adding entitlement to user: {e}")
-	print(response)
+	print(response, response.text if not response.ok else "")
 	return response.json()
 
 

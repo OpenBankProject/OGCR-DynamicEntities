@@ -1,16 +1,39 @@
-from dynamic_entities import entities_data, add_entitlement_to_user
-from obp_client import token
+"""Grant the logged in user the Roles for the OGCR dynamic entities.
 
-#TODO: call get current_user
-user_id = "9e564728-48fc-4ce4-97ae-417889746959"
-# The Roles that gate an entity's DEFINITION. These keep their old names and are still granted at the
-# empty bank id; they join the Record Roles below when the system level management endpoints gain a
-# space in their URL.
+Grants the entity DEFINITION Roles, plus the RECORD Roles for every
+`Entity: <name>` in the parsed entities file (produced by
+`parse_minimum_fields.py --save`), all at bank id SYS.
+
+Usage:
+    python3 create_entitlements.py [path/to/entities_output.txt]
+"""
+
+import sys
+
+import requests
+
+from dynamic_entities import add_entitlement_to_user
+from delete_ogcr_entities import DEFAULT_INPUT, parse_entity_names
+from obp_client import token, obp_host
+
+entities_file = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_INPUT
+entity_names = parse_entity_names(entities_file)
+print(f"Read {len(entity_names)} entities from {entities_file}")
+
+# Grant the Roles to whoever is logged in.
+response = requests.get(f"{obp_host}/obp/v6.0.0/users/current",
+	headers={"Authorization": f"DirectLogin token={token}"})
+response.raise_for_status()
+user_id = response.json()["user_id"]
+print(f"Granting Roles to user_id {user_id}")
+# The Roles that gate an entity's DEFINITION. The v6.0.0 system-dynamic-entities management endpoints
+# require these (they replaced the old CanXSystemLevelDynamicEntity names) and, like the Record Roles
+# below, they are granted at bank id SYS.
 meta_role_names = [
-	"CanCreateSystemLevelDynamicEntity",
-	"CanDeleteSystemLevelDynamicEntity",
-	"CanGetSystemLevelDynamicEntities",
-	"CanUpdateSystemLevelDynamicEntity"
+	"CanCreateDynamicEntityDefinition",
+	"CanDeleteDynamicEntityDefinition",
+	"CanGetDynamicEntityDefinitions",
+	"CanUpdateDynamicEntityDefinition"
 	]
 # The Roles that gate an entity's RECORDS. They were renamed on 2026-09-24: the "_System" variant is
 # gone, because the Role no longer says which space it applies to -- the bank id of the grant does.
@@ -26,13 +49,14 @@ for m in meta_role_names:
 	add_entitlement_to_user(
 		token=token,
 		user_id=user_id,
-		role_name=m)
+		role_name=m,
+		bank_id=system_space_bank_id)
 
-for i in entities_data:
+for name in entity_names:
 	for r in role_names:
-		print(r + i[0])
+		print(r + name)
 		add_entitlement_to_user(
 			token=token,
 			user_id=user_id,
-			role_name=r + i[0],
+			role_name=r + name,
 			bank_id=system_space_bank_id)

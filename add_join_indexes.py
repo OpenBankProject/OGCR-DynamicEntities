@@ -30,6 +30,7 @@ import sys
 import requests
 
 from obp_client import token as TOKEN, obp_host as HOST
+from obp_space import record_path
 from obp_dynamic_api import (
     list_system_dynamic_entities,
     should_index_field,
@@ -71,7 +72,7 @@ def put_body(entry):
 
 def verify(base_url, token):
     url = (
-        f"{base_url}/obp/dynamic-entity/activity"
+        f"{base_url}{record_path('activity')}"
         "?obp_exists[activity_verification]=filter[status_code]=eq:verified"
     )
     headers = {"Authorization": f"DirectLogin token={token}"}

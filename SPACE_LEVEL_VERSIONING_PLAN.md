@@ -1,6 +1,11 @@
 # Space (bank) level Dynamic Entities as a versioning mechanism — plan
 
-**Status:** proposal, not decided. Nothing in this document has been implemented.
+**Status:** the scripts side (§4.1, §6.1) is implemented as of 2026-09-25: `OBP_ENTITY_SPACE_ID`
+and `obp_space.py`, with `create_space_bank.py` creating the bank if it is missing.
+`OBP_ENTITY_PREFIX` was removed from this repo, which settles risk 2 in favour of spaces.
+§7 is out of date: record Roles are now `Can<Action>DynamicEntityRecord_<entity>` at every
+level, granted at the bank id (`SYS` for system level), so the name no longer changes.
+The OGCR-App side (§4.2, §6.2) is not done.
 **Written:** 2026-09-21. **Verified against:** `http://localhost:8080` (OBP, dynamic entity API v5.1.0).
 
 The idea: use an OBP **bank — aka Space** — as a namespace for a *version* of the OGCR

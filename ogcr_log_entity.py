@@ -1,8 +1,8 @@
 """Audit-log dynamic entity for OGCR data creation.
 
-This module defines a single system dynamic entity named after this application
-(`<prefix>ogcr_dynamicentities_log`, where `<prefix>` is the optional
-`OBP_ENTITY_PREFIX`) and the helpers needed to (a) make sure it exists on OBP and
+This module defines a single dynamic entity named after this application
+(`ogcr_dynamicentities_log`, in the same space as the other entities -- see
+obp_space.py) and the helpers needed to (a) make sure it exists on OBP and
 (b) write one log record to it per event while dummy data is being created. It is
 consumed by `create_dummy_data.py`, which records:
   - `entity_created`  one record per successfully created object;
@@ -19,12 +19,11 @@ observes.
 """
 import datetime
 import logging
-import os
 
 import requests
-from dotenv import load_dotenv
 
 from obp_client import obp_host
+from obp_space import record_path
 from obp_dynamic_api import (
     create_system_dynamic_entity,
     get_dynamic_entity_id_by_name,
@@ -32,16 +31,9 @@ from obp_dynamic_api import (
 
 logger = logging.getLogger(__name__)
 
-# Apply the same entity-name prefix convention as dynamic_entities.py: the
-# optional OBP_ENTITY_PREFIX, lowercased and given a trailing underscore.
-load_dotenv()
-_PREFIX = os.getenv("OBP_ENTITY_PREFIX", "").lower()
-if _PREFIX and not _PREFIX.endswith("_"):
-    _PREFIX = _PREFIX + "_"
-
 # Name the log entity after this application (lowercase, underscores only).
 APP_NAME = "ogcr_dynamicentities"
-LOG_ENTITY_NAME = f"{_PREFIX}{APP_NAME}_log"
+LOG_ENTITY_NAME = f"{APP_NAME}_log"
 
 # Event types written to the log entity's `event_type` field.
 EVENT_CREATED = "entity_created"
@@ -172,7 +164,7 @@ def log_event(
         "references": references if references is not None else [],
         "timestamp": _now_iso(),
     }
-    url = f"{base_url}/obp/dynamic-entity/{LOG_ENTITY_NAME}"
+    url = f"{base_url}{record_path(LOG_ENTITY_NAME)}"
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"DirectLogin token={token}"

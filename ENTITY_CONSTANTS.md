@@ -6,13 +6,7 @@ This document describes the entity constants and helper functions used throughou
 
 ## Configuration
 
-The entity prefix is configurable via the `OBP_ENTITY_PREFIX` environment variable in the `.env` file:
-
-```bash
-OBP_ENTITY_PREFIX=ogcr3
-```
-
-This prefix is automatically converted to lowercase and used in all entity names.
+Entity names have no prefix. `OBP_ENTITY_PREFIX` has been removed: to keep one set of OGCR entities apart from another, put them under a bank with `OBP_ENTITY_SPACE_ID` instead (see the README, "Where the entities live").
 
 ## Entity Name Constants
 
@@ -34,15 +28,15 @@ from dynamic_entities import (
 
 ### Available Constants
 
-| Constant | Example Value (prefix=ogcr3) | Description |
+| Constant | Value | Description |
 |----------|------------------------------|-------------|
-| `ENTITY_PROJECT` | `ogcr3_project` | Carbon credit project |
-| `ENTITY_PARCEL` | `ogcr3_parcel` | Land parcel |
-| `ENTITY_PARCEL_OWNERSHIP_VERIFICATION` | `ogcr3_parcel_owner_verification` | Parcel ownership verification |
-| `ENTITY_PROJECT_PARCEL_VERIFICATION` | `ogcr3_project_parcel_verification` | Project-parcel verification (baseline) |
-| `ENTITY_PROJECT_VERIFICATION` | `ogcr3_project_verification` | Project verification |
-| `ENTITY_PARCEL_MONITORING_PERIOD_VERIFICATION` | `ogcr3_parcel_monitoring_period_verification` | Parcel monitoring period verification |
-| `ENTITY_PROJECT_MONITORING_PERIOD_VERIFICATION` | `ogcr3_project_monitoring_period_verification` | Project monitoring period verification |
+| `ENTITY_PROJECT` | `project` | Carbon credit project |
+| `ENTITY_PARCEL` | `parcel` | Land parcel |
+| `ENTITY_PARCEL_OWNERSHIP_VERIFICATION` | `parcel_owner_verification` | Parcel ownership verification |
+| `ENTITY_PROJECT_PARCEL_VERIFICATION` | `project_parcel_verification` | Project-parcel verification (baseline) |
+| `ENTITY_PROJECT_VERIFICATION` | `project_verification` | Project verification |
+| `ENTITY_PARCEL_MONITORING_PERIOD_VERIFICATION` | `parcel_monitoring_period_verification` | Parcel monitoring period verification |
+| `ENTITY_PROJECT_MONITORING_PERIOD_VERIFICATION` | `project_monitoring_period_verification` | Project monitoring period verification |
 
 ## Helper Functions
 
@@ -57,7 +51,7 @@ Generates the response key from an entity constant. This is used when parsing AP
 from dynamic_entities import ENTITY_PROJECT, get_response_key
 
 response = create_dynamic_entity_object(ENTITY_PROJECT, data, token)
-response_key = get_response_key(ENTITY_PROJECT)  # Returns: 'ogcr3_project'
+response_key = get_response_key(ENTITY_PROJECT)  # Returns: 'project'
 project_obj = response[response_key]
 ```
 
@@ -73,7 +67,7 @@ response = create_dynamic_entity_object(ENTITY_PROJECT, data, token)
 response_key = get_response_key(ENTITY_PROJECT)
 project_obj = response[response_key]
 
-id_key = get_id_key(ENTITY_PROJECT)  # Returns: 'ogcr3_project_id'
+id_key = get_id_key(ENTITY_PROJECT)  # Returns: 'project_id'
 project_id = project_obj[id_key]
 ```
 
@@ -86,7 +80,7 @@ Generates the list key from an entity constant. This is used when fetching multi
 from dynamic_entities import ENTITY_PROJECT, get_list_key
 
 response = get_all_objects_for_system_dynamic_entity(ENTITY_PROJECT, token)
-list_key = get_list_key(ENTITY_PROJECT)  # Returns: 'ogcr3_project_list'
+list_key = get_list_key(ENTITY_PROJECT)  # Returns: 'project_list'
 projects = response[list_key]
 ```
 
@@ -184,9 +178,9 @@ If you have hardcoded entity names in your code, replace them as follows:
 ### Before (❌ Don't do this):
 ```python
 # Hardcoded entity name
-response = create_entity_object("ogcr3_project", data, token)
-project_obj = response["ogcr3_project"]
-project_id = project_obj["ogcr3_project_id"]
+response = create_entity_object("project", data, token)
+project_obj = response["project"]
+project_id = project_obj["project_id"]
 ```
 
 ### After (✅ Do this):
@@ -202,9 +196,6 @@ project_id = project_obj[id_key]
 ```
 
 ## Troubleshooting
-
-### Issue: "KeyError: 'ogcr2_project'"
-**Solution:** The prefix has changed. Check your `.env` file and ensure `OBP_ENTITY_PREFIX` is set correctly.
 
 ### Issue: Entity names don't match API
 **Solution:** Make sure you're using the entity constants from `dynamic_entities.py`, not hardcoded strings.

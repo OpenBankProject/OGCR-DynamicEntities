@@ -1,6 +1,7 @@
 import requests
 import logging
 from obp_client import token, obp_host
+from obp_space import management_path, record_path
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -21,7 +22,7 @@ def get_all_system_dynamic_entities(token=None):
 	Returns:
 		dict: The API response
 	"""
-	url = f"{BASE_URL}/obp/v6.0.0/management/system-dynamic-entities"
+	url = f"{BASE_URL}{management_path('v6.0.0')}"
 
 	headers = {
 		"Content-Type": "application/json"
@@ -51,7 +52,7 @@ def get_all_objects_for_system_dynamic_entity(entity_name, token=None):
 	Returns:
 		dict: The API response, or None if entity doesn't exist (404)
 	"""
-	url = f"{BASE_URL}/obp/dynamic-entity/{entity_name}"
+	url = f"{BASE_URL}{record_path(entity_name)}"
 
 	headers = {
 		"Content-Type": "application/json"
@@ -81,7 +82,7 @@ def get_all_objects_for_system_dynamic_entity(entity_name, token=None):
 
 def delete_object_for_system_dynamic_entity(entity_name, object_id, token=None):
 
-	url = f"{BASE_URL}/obp/dynamic-entity/{entity_name}/{object_id}"
+	url = f"{BASE_URL}{record_path(entity_name)}/{object_id}"
 
 	headers = {
 		"Content-Type": "application/json"
@@ -103,7 +104,7 @@ def delete_object_for_system_dynamic_entity(entity_name, object_id, token=None):
 
 def delete_system_dynamic_entity(entity_id, token=None):
 
-	url = f"{BASE_URL}/obp/v6.0.0/management/system-dynamic-entities/{entity_id}"
+	url = f"{BASE_URL}{management_path('v6.0.0')}/{entity_id}"
 
 	headers = {
 		"Content-Type": "application/json"

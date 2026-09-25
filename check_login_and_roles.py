@@ -5,10 +5,13 @@ Read-only: it logs in with the credentials from `.env` / the environment
 current user, and reports which of the Roles this project needs are present
 and which are missing. It creates, updates and deletes nothing.
 
-Roles checked:
-  - the entity DEFINITION Roles, at bank id SYS
+When OBP_ENTITY_SPACE_ID is set it also checks that bank exists.
+
+Roles checked, at the bank id of the entities' space (OBP_ENTITY_SPACE_ID, or
+SYS for system level; see obp_space.py):
+  - the entity DEFINITION Roles
   - the entity RECORD Roles for every `Entity: <name>` in the parsed entities
-    file (default `entities_output.txt`), at bank id SYS
+    file (default `entities_output.txt`)
   - any extra Roles passed with --role (at the empty bank id, or
     ROLE@BANK_ID for a bank level Role)
 
@@ -18,7 +21,7 @@ Usage:
                                      [--list]
 
 Exits 0 if login worked and every checked Role is present, 1 if login failed,
-2 if any Role is missing.
+2 if any Role is missing, 3 if the OBP_ENTITY_SPACE_ID bank does not exist.
 """
 
 import argparse
@@ -28,6 +31,8 @@ import sys
 
 import requests
 from dotenv import load_dotenv
+
+from obp_space import ROLE_BANK_ID, SPACE_ID, describe
 
 load_dotenv()
 
@@ -40,10 +45,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_INPUT = "entities_output.txt"
 ENTITY_PREFIX = "Entity:"
-SYSTEM_SPACE_BANK_ID = "SYS"
-# The Roles the v6.0.0 system-dynamic-entities management endpoints require (per the server's
-# resource docs). They replaced the old CanXSystemLevelDynamicEntity names and, like the record
-# Roles, are granted at bank id SYS.
+# The Roles the dynamic entity management endpoints require (per the server's resource docs). They
+# replaced the old CanXSystemLevelDynamicEntity names and, like the record Roles, are granted at the
+# bank id of the space.
 META_ROLE_NAMES = [
 	"CanCreateDynamicEntityDefinition",
 	"CanDeleteDynamicEntityDefinition",
@@ -110,11 +114,11 @@ def get_current_user(host, token):
 
 def required_roles(args):
 	"""Return a list of (role_name, bank_id) pairs to check."""
-	roles = [(r, SYSTEM_SPACE_BANK_ID) for r in META_ROLE_NAMES]
+	roles = [(r, ROLE_BANK_ID) for r in META_ROLE_NAMES]
 	if not args.no_entities:
 		if os.path.exists(args.file):
 			for name in parse_entity_names(args.file):
-				roles += [(p + name, SYSTEM_SPACE_BANK_ID) for p in RECORD_ROLE_PREFIXES]
+				roles += [(p + name, ROLE_BANK_ID) for p in RECORD_ROLE_PREFIXES]
 		else:
 			logger.warning(f"Entities file '{args.file}' not found — skipping record Roles")
 	for r in args.role:
@@ -145,6 +149,7 @@ def main():
 	logger.info(f"OBP_HOSTNAME: {host}")
 	logger.info(f"OBP_USERNAME: {mask_credential(username)}")
 	logger.info(f"OBP_CONSUMER_KEY: {mask_credential(os.environ['OBP_CONSUMER_KEY'])}")
+	logger.info(f"OBP_ENTITY_SPACE_ID: {SPACE_ID or '(empty)'} -> entities at {describe()}, Roles at bank id {ROLE_BANK_ID}")
 
 	# 1. Login
 	token = direct_login(host, username, os.environ['OBP_PASSWORD'], os.environ['OBP_CONSUMER_KEY'])
@@ -157,7 +162,16 @@ def main():
 		return 1
 	logger.info(f"✓ Logged in as {user.get('username')} (user_id {user.get('user_id')}, provider {user.get('provider')})")
 
-	# 2. Roles
+	# 2. The space's bank must exist, or nothing can be created in it
+	if SPACE_ID:
+		url = f"{host}/obp/v6.0.0/banks/{SPACE_ID}"
+		response = requests.get(url, headers={'Authorization': f"DirectLogin token={token}"}, timeout=30)
+		if response.status_code != 200:
+			logger.error(f"✗ Bank '{SPACE_ID}' (OBP_ENTITY_SPACE_ID) not found ({response.status_code}): {response.text}")
+			return 3
+		logger.info(f"✓ Bank '{SPACE_ID}' exists")
+
+	# 3. Roles
 	entitlements = user.get("entitlements", {}).get("list", [])
 	held = {(e.get("role_name"), e.get("bank_id", "")) for e in entitlements}
 	if args.list:

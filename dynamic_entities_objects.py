@@ -1,7 +1,7 @@
 import requests
 from obp_client import token, obp_host
+from obp_space import record_path
 from dynamic_entities import (
-	PREFIX,
 	ENTITY_PROJECT,
 	ENTITY_PARCEL,
 	ENTITY_PARCEL_OWNERSHIP_VERIFICATION,
@@ -15,7 +15,7 @@ BASE_URL = obp_host  # Replace with your OBP instance URL
 DIRECTLOGIN_TOKEN = token  # Optional: Replace with your DirectLogin token
 
 def create_entity_object(entity_name, payload, token=None):
-	url = f"{BASE_URL}/obp/dynamic-entity/{entity_name}"
+	url = f"{BASE_URL}{record_path(entity_name)}"
 
 	headers = {
 		"Content-Type": "application/json"

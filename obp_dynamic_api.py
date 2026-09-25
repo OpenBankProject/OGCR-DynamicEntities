@@ -12,6 +12,7 @@ import logging
 import json
 import re
 from obp_client import token as DEFAULT_TOKEN, obp_host as DEFAULT_HOST
+from obp_space import management_path
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +91,7 @@ def should_index_field(entity_name, field_name, prop_type, declared_type=None):
         return True
     if field_name in ALWAYS_INDEX_FIELD_NAMES:
         return True
-    # <entity>_id, tolerating an OBP_ENTITY_PREFIX on the entity name.
+    # <entity>_id, tolerating a prefix on the entity name.
     if field_name.endswith("_id") and entity_name.endswith(field_name[:-3]):
         return True
     return False
@@ -119,7 +120,7 @@ def list_system_dynamic_entities(token=None, base_url=None):
     """Return the management endpoint JSON for existing system dynamic entities."""
     token = token or DEFAULT_TOKEN
     base_url = base_url or DEFAULT_HOST
-    url = f"{base_url}/obp/v5.1.0/management/system-dynamic-entities"
+    url = f"{base_url}{management_path('v5.1.0')}"
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"DirectLogin token={token}"
@@ -135,7 +136,7 @@ def create_system_dynamic_entity(entity_definition, token=None, base_url=None):
     """
     token = token or DEFAULT_TOKEN
     base_url = base_url or DEFAULT_HOST
-    url = f"{base_url}/obp/v5.1.0/management/system-dynamic-entities"
+    url = f"{base_url}{management_path('v5.1.0')}"
 
     _tag_entity_definition_with_ogcr(entity_definition)
 
@@ -167,7 +168,7 @@ def update_system_dynamic_entity(dynamic_entity_id, entity_definition, token=Non
     """
     token = token or DEFAULT_TOKEN
     base_url = base_url or DEFAULT_HOST
-    url = f"{base_url}/obp/v5.1.0/management/system-dynamic-entities/{dynamic_entity_id}"
+    url = f"{base_url}{management_path('v5.1.0')}/{dynamic_entity_id}"
 
     _tag_entity_definition_with_ogcr(entity_definition)
 
@@ -372,7 +373,7 @@ def build_entity_definition_from_parsed(name, parsed_fields, has_personal=False,
             "properties": properties,
         }
     }
-    # hasPublicAccess opens GET /obp/dynamic-entity/public/<name> to anyone with
+    # hasPublicAccess opens GET obp_space.record_path(<name>, public=True) to anyone with
     # no login (read only; the shared pool only). Sent only when switched on, so
     # an OBP build that predates the flag is unaffected.
     if has_public:

@@ -15,7 +15,7 @@ def _example_for_prop(prop_def):
     if example is not None:
         # return a deep copy to avoid accidental mutation
         return copy.deepcopy(example)
-    # handle reference types like 'reference:Parcel' or 'reference:ogcr3_project'
+    # handle reference types like 'reference:Parcel' or 'reference:project'
     if isinstance(ptype, str) and ptype.startswith("reference:"):
         # return a stable example UUID
         return str(uuid.uuid4())

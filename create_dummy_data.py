@@ -31,6 +31,7 @@ import re
 import requests
 
 from obp_client import token as default_token, obp_host
+from obp_space import record_path
 from parse_minimum_fields import parse_xlsx_entities
 from fixtures import fixture_records, resolve_name_field
 from ogcr_log_entity import (
@@ -306,7 +307,7 @@ def existing_object_ids(entity_name, token=None):
     Returns an empty set if the table cannot be read (entity missing, API
     error): the caller then simply attempts every fixture row.
     """
-    url = f"{BASE_URL}/obp/dynamic-entity/{entity_name}"
+    url = f"{BASE_URL}{record_path(entity_name)}"
     headers = {}
     if token:
         headers["Authorization"] = f"DirectLogin token={token}"
@@ -322,7 +323,7 @@ def existing_object_ids(entity_name, token=None):
 
 
 def create_object(entity_name, data, token=None):
-    url = f"{BASE_URL}/obp/dynamic-entity/{entity_name}"
+    url = f"{BASE_URL}{record_path(entity_name)}"
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"DirectLogin token={token}"

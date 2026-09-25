@@ -91,7 +91,7 @@ def main():
             
             # Handle case where the list key might not exist (no objects)
             # The key format is: prefix_entityname_list (with underscores between each part)
-            # e.g., "ogcr3_project_list" for ogcr3_project
+            # e.g., "project_list" for project
             list_key = get_list_key(entity_name)
             objects = response.get(list_key, [])
             

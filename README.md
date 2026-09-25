@@ -12,7 +12,7 @@ pip install -r requirements.txt
   - **OBP_PASSWORD:** OBP password
   - **OBP_CONSUMER_KEY:** consumer key for DirectLogin
   - **OBP_HOSTNAME:** (optional) OBP base URL; defaults in `obp_client.py`
-  - **OBP_ENTITY_SPACE_ID:** (optional) the bank id (aka Space) that owns all the OGCR dynamic entities, e.g. `ogcr`. Empty = system level. See "Where the entities live" below.
+  - **OBP_ENTITY_SPACE_ID:** (optional) the bank id (aka Space) that owns all the OGCR dynamic entities. Defaults to `ogcr`; set it to the empty string for system level. See "Where the entities live" below.
 
 **Files**
 - **`parse_minimum_fields.py`**: Parse the minimal field matrix Excel (`min_field_matrix.xlsx` by default) and optionally create dynamic entities on OBP.
@@ -26,12 +26,12 @@ pip install -r requirements.txt
 
 **Where the entities live (`OBP_ENTITY_SPACE_ID`)**
 
-All OGCR entities live in one place: either at system level, or under one bank (OBP also calls a bank a *Space*). Set `OBP_ENTITY_SPACE_ID` in `.env` to choose:
+All OGCR entities live in one place: either at system level, or under one bank (OBP also calls a bank a *Space*). Set `OBP_ENTITY_SPACE_ID` in `.env` to choose; unset, it is `ogcr`, the same default as OGCR-App and OGCR-chain-cache:
 
 | `OBP_ENTITY_SPACE_ID` | Definitions | Records | Roles granted at bank id |
 |---|---|---|---|
 | empty | `/obp/<v>/management/system-dynamic-entities` | `/obp/dynamic-entity/[public/]<entity>` | `SYS` |
-| `ogcr` | `/obp/<v>/management/banks/ogcr/dynamic-entities` | `/obp/dynamic-entity/banks/ogcr/[public/]<entity>` | `ogcr` |
+| `ogcr` (default) | `/obp/<v>/management/banks/ogcr/dynamic-entities` | `/obp/dynamic-entity/banks/ogcr/[public/]<entity>` | `ogcr` |
 
 Every script (create, update, delete, dummy data, Roles, join indexes, audit log) builds its URLs from `obp_space.py`, so they always agree, and deleting only ever touches entities in the configured space. This replaces the old `OBP_ENTITY_PREFIX`, which has been removed.
 

@@ -1,7 +1,8 @@
 """Where the OGCR dynamic entities live on OBP: at system level, or under one bank (aka Space).
 
-Set `OBP_ENTITY_SPACE_ID` in `.env` to the bank id that owns this deployment's
-entities, e.g. `ogcr`. Leave it empty for system level. Every script builds its
+`OBP_ENTITY_SPACE_ID` in `.env` is the bank id that owns this deployment's
+entities. Unset, it defaults to `ogcr`, the same default as OGCR-App and
+OGCR-chain-cache. Set it to the empty string for system level. Every script builds its
 dynamic-entity URLs and Role grants from here, so they can never disagree.
 
     | Level | Definitions (management)                        | Records                                            | Roles granted at |
@@ -21,7 +22,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SPACE_ID = os.getenv("OBP_ENTITY_SPACE_ID", "").strip()
+DEFAULT_SPACE_ID = "ogcr"
+
+# Unset -> the default bank; set but empty -> system level.
+SPACE_ID = os.getenv("OBP_ENTITY_SPACE_ID", DEFAULT_SPACE_ID).strip()
 
 # The bank id at which entity Roles are granted: the space's bank id, or the literal
 # SYS for system level entities (not the empty string).

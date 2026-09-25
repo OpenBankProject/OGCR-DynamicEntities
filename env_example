@@ -4,9 +4,10 @@ OBP_PASSWORD=mysecretpassword
 OBP_CONSUMER_KEY=myconsumerkey
 OBP_LOG_LEVEL=INFO
 # Optional parameters
-# The bank (aka Space) that owns the OGCR dynamic entities, e.g. ogcr.
-# Empty = system level. recreate_ogcr_entities.sh creates the bank if it doesn't exist.
-OBP_ENTITY_SPACE_ID=
+# The bank (aka Space) that owns the OGCR dynamic entities. Unset = ogcr, the
+# same default as OGCR-App and OGCR-chain-cache. Set it to the empty string for
+# system level. recreate_ogcr_entities.sh creates the bank if it doesn't exist.
+# OBP_ENTITY_SPACE_ID=ogcr
 
 # Controls whether created/updated dynamic entities expose per-user records
 # Set to true/1/yes to enable

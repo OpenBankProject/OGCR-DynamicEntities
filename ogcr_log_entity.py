@@ -21,9 +21,8 @@ observes.
 import datetime
 import logging
 
-import requests
 
-from obp_client import obp_host
+from obp_client import obp_host, session
 from obp_space import record_path
 from obp_dynamic_api import (
     create_system_dynamic_entity,
@@ -170,7 +169,7 @@ def log_event(
     if token:
         headers["Authorization"] = f"DirectLogin token={token}"
     try:
-        resp = requests.post(url, headers=headers, json=record)
+        resp = session.post(url, headers=headers, json=record)
         resp.raise_for_status()
         return resp.json()
     except Exception as e:

@@ -34,10 +34,8 @@ Exits 0 on success, 1 if the sheet has errors in the matrix or anything failed.
 import argparse
 import sys
 
-import requests
-
 from get_and_delete_dynamic_entities import get_all_system_dynamic_entities
-from obp_client import token, obp_host
+from obp_client import token, obp_host, session
 from obp_space import ROLE_BANK_ID, describe
 from role_groups import group_roles, parse_role_groups
 
@@ -52,7 +50,7 @@ def headers():
 
 def get_groups_at_space():
 	"""{group_name: group} of the groups at ROLE_BANK_ID."""
-	response = requests.get(GROUPS_URL, params={"bank_id": ROLE_BANK_ID}, headers=headers(), timeout=30)
+	response = session.get(GROUPS_URL, params={"bank_id": ROLE_BANK_ID}, headers=headers(), timeout=30)
 	if not response.ok:
 		raise RuntimeError(f"{response.status_code} {response.text}")
 	groups = {}
@@ -69,7 +67,7 @@ def get_group_members(group_id):
 	"""{user_id: {"username", "roles", "entitlement_ids"}} of a group's members, from the
 	entitlements it granted (`entitlement_ids` maps role -> entitlement id).
 	A member holding none of the group's Roles through it (e.g. the group had none) is not seen."""
-	response = requests.get(f"{GROUPS_URL}/{group_id}/entitlements", headers=headers(), timeout=30)
+	response = session.get(f"{GROUPS_URL}/{group_id}/entitlements", headers=headers(), timeout=30)
 	if not response.ok:
 		raise RuntimeError(f"{response.status_code} {response.text}")
 	members = {}
@@ -83,7 +81,7 @@ def get_group_members(group_id):
 
 def get_roles_held(user_id):
 	"""The Roles a user holds at ROLE_BANK_ID, however they were granted."""
-	response = requests.get(USERS_URL, params={"user_id": user_id}, headers=headers(), timeout=30)
+	response = session.get(USERS_URL, params={"user_id": user_id}, headers=headers(), timeout=30)
 	if not response.ok:
 		raise RuntimeError(f"{response.status_code} {response.text}")
 	users = response.json().get("users", [])
@@ -127,7 +125,7 @@ def sync_members(group_id, roles, dry_run, tag):
 			continue
 		if gained:
 			# Adding an existing member again grants only the Roles they do not hold.
-			response = requests.post(f"{USERS_URL}/{user_id}/group-entitlements", json={"group_id": group_id},
+			response = session.post(f"{USERS_URL}/{user_id}/group-entitlements", json={"group_id": group_id},
 				headers=headers(), timeout=30)
 			if response.ok:
 				print(f"    ✓ {len(response.json().get('entitlements_created', []))} Role(s) granted")
@@ -135,7 +133,7 @@ def sync_members(group_id, roles, dry_run, tag):
 				failed += 1
 				print(f"    ✗ grant failed: {response.status_code} {response.text}")
 		for r in lost:
-			response = requests.delete(f"{obp_host}/obp/v6.0.0/entitlements/{member['entitlement_ids'][r]}",
+			response = session.delete(f"{obp_host}/obp/v6.0.0/entitlements/{member['entitlement_ids'][r]}",
 				headers=headers(), timeout=30)
 			if response.ok:
 				print(f"    ✓ removed {r}")
@@ -215,7 +213,7 @@ def main():
 				print(f"    + {r}")
 			if args.dry_run:
 				continue
-			response = requests.post(GROUPS_URL, json={**body, "bank_id": ROLE_BANK_ID, "group_description": ""},
+			response = session.post(GROUPS_URL, json={**body, "bank_id": ROLE_BANK_ID, "group_description": ""},
 				headers=headers(), timeout=30)
 		else:
 			before = set(existing.get("list_of_roles") or [])
@@ -235,7 +233,7 @@ def main():
 			if clear_description:
 				print("    clear the generated description")
 			if not args.dry_run:
-				response = requests.put(f"{GROUPS_URL}/{existing['group_id']}", json=body,
+				response = session.put(f"{GROUPS_URL}/{existing['group_id']}", json=body,
 					headers=headers(), timeout=30)
 				if not response.ok:
 					failed += 1

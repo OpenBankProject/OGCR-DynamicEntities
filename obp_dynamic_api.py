@@ -11,7 +11,7 @@ import requests
 import logging
 import json
 import re
-from obp_client import token as DEFAULT_TOKEN, obp_host as DEFAULT_HOST
+from obp_client import token as DEFAULT_TOKEN, obp_host as DEFAULT_HOST, session
 from obp_space import management_path
 
 logger = logging.getLogger(__name__)
@@ -124,7 +124,7 @@ def list_system_dynamic_entities(token=None, base_url=None):
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"DirectLogin token={token}"
-    resp = requests.get(url, headers=headers)
+    resp = session.get(url, headers=headers)
     resp.raise_for_status()
     return resp.json()
 
@@ -146,7 +146,7 @@ def create_system_dynamic_entity(entity_definition, token=None, base_url=None):
 
     logger.debug("Creating system dynamic entity: %s", json.dumps(entity_definition, indent=2))
 
-    resp = requests.post(url, headers=headers, json=entity_definition)
+    resp = session.post(url, headers=headers, json=entity_definition)
     _raise_for_status_with_body(resp)
     return resp.json()
 
@@ -178,7 +178,7 @@ def update_system_dynamic_entity(dynamic_entity_id, entity_definition, token=Non
 
     logger.debug("Updating system dynamic entity %s: %s", dynamic_entity_id, json.dumps(entity_definition, indent=2))
 
-    resp = requests.put(url, headers=headers, json=entity_definition)
+    resp = session.put(url, headers=headers, json=entity_definition)
     _raise_for_status_with_body(resp)
     return resp.json()
 

@@ -38,9 +38,8 @@ import sys
 from pathlib import Path
 from urllib.parse import quote
 
-import requests
 
-from obp_client import token as DEFAULT_TOKEN, obp_host as DEFAULT_HOST
+from obp_client import token as DEFAULT_TOKEN, obp_host as DEFAULT_HOST, session
 
 HERE = Path(__file__).parent
 
@@ -166,7 +165,7 @@ def build_payload(doc, include_body=True):
 def find_existing(doc, token, host):
     """Return the stored doc whose request_verb + request_url match, or None."""
     url = f"{host}/obp/v4.0.0/management/dynamic-resource-docs"
-    resp = requests.get(url, headers=_headers(token))
+    resp = session.get(url, headers=_headers(token))
     _raise_with_body(resp)
     for existing in resp.json().get("dynamic-resource-docs", []):
         if (
@@ -180,7 +179,7 @@ def find_existing(doc, token, host):
 def cmd_compile(name, doc, token, host):
     """Dry run. Returns compiler problems; stores nothing."""
     url = f"{host}/obp/v7.0.0/management/dynamic-resource-docs/compile"
-    resp = requests.post(url, headers=_headers(token), json=build_payload(doc))
+    resp = session.post(url, headers=_headers(token), json=build_payload(doc))
     _raise_with_body(resp)
     result = resp.json()
     # Response shape: {"compiles": bool, "errors": [...], "duration_ms": int}.
@@ -197,7 +196,7 @@ def cmd_compile(name, doc, token, host):
 def cmd_verify(name, doc, token, host):
     """Call the endpoint with no credentials — the registry surface must be public."""
     url = served_url(host, doc)
-    resp = requests.get(url, timeout=60)
+    resp = session.get(url, timeout=60)
     print(f"{name}: anonymous GET {url} -> HTTP {resp.status_code}")
     if resp.status_code != 200:
         print(resp.text[:500])
@@ -209,7 +208,7 @@ def cmd_verify(name, doc, token, host):
 
 def cmd_list(_name, _doc, token, host):
     url = f"{host}/obp/v4.0.0/management/dynamic-resource-docs"
-    resp = requests.get(url, headers=_headers(token))
+    resp = session.get(url, headers=_headers(token))
     _raise_with_body(resp)
     docs = resp.json().get("dynamic-resource-docs", [])
     print(f"{len(docs)} dynamic resource doc(s) on {host}")
@@ -228,7 +227,7 @@ def cmd_create(name, doc, token, host):
             "Use `update`."
         )
     url = f"{host}/obp/v4.0.0/management/dynamic-resource-docs"
-    resp = requests.post(url, headers=_headers(token), json=build_payload(doc))
+    resp = session.post(url, headers=_headers(token), json=build_payload(doc))
     _raise_with_body(resp)
     created = resp.json()
     print(f"{name}: created {created.get('dynamic_resource_doc_id')}")
@@ -242,7 +241,7 @@ def cmd_update(name, doc, token, host):
         raise SystemExit(f"{name}: nothing to update — no doc for {doc['request_url']}. Use `create`.")
     doc_id = existing["dynamic_resource_doc_id"]
     url = f"{host}/obp/v4.0.0/management/dynamic-resource-docs/{doc_id}"
-    resp = requests.put(url, headers=_headers(token), json=build_payload(doc))
+    resp = session.put(url, headers=_headers(token), json=build_payload(doc))
     _raise_with_body(resp)
     print(f"{name}: updated {doc_id}")
     return 0
@@ -255,7 +254,7 @@ def cmd_delete(name, doc, token, host):
         return 0
     doc_id = existing["dynamic_resource_doc_id"]
     url = f"{host}/obp/v4.0.0/management/dynamic-resource-docs/{doc_id}"
-    resp = requests.delete(url, headers=_headers(token))
+    resp = session.delete(url, headers=_headers(token))
     _raise_with_body(resp)
     print(f"{name}: deleted {doc_id}")
     return 0

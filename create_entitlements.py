@@ -16,12 +16,10 @@ Usage:
 
 import sys
 
-import requests
-
 from dynamic_entities import add_entitlement_to_user
 from delete_ogcr_entities import DEFAULT_INPUT, parse_entity_names
 from get_and_delete_dynamic_entities import get_all_system_dynamic_entities
-from obp_client import token, obp_host
+from obp_client import token, obp_host, session
 from obp_space import ROLE_BANK_ID, describe
 from role_groups import GROUP_ADMIN_ROLES
 
@@ -30,7 +28,7 @@ entity_names = parse_entity_names(entities_file)
 print(f"Read {len(entity_names)} entities from {entities_file}")
 
 # Grant the Roles to whoever is logged in.
-response = requests.get(f"{obp_host}/obp/v6.0.0/users/current",
+response = session.get(f"{obp_host}/obp/v6.0.0/users/current",
 	headers={"Authorization": f"DirectLogin token={token}"})
 response.raise_for_status()
 user_id = response.json()["user_id"]

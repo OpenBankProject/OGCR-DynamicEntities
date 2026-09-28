@@ -1,5 +1,5 @@
 import requests
-from obp_client import token, obp_host
+from obp_client import token, obp_host, session
 from obp_space import record_path
 from dynamic_entities import (
 	ENTITY_PROJECT,
@@ -26,7 +26,7 @@ def create_entity_object(entity_name, payload, token=None):
 		headers["Authorization"] = f"DirectLogin token={token}"
 
 	try:
-		response = requests.post(url, headers=headers, json=payload)
+		response = session.post(url, headers=headers, json=payload)
 		response.raise_for_status()
 		return response.json()
 	except requests.exceptions.RequestException as e:

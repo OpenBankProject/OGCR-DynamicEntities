@@ -1,6 +1,6 @@
 import requests
 import logging
-from obp_client import token, obp_host
+from obp_client import token, obp_host, session
 from obp_space import management_path, record_path
 
 # Configure logging
@@ -33,7 +33,7 @@ def get_all_system_dynamic_entities(token=None):
 		headers["Authorization"] = f"DirectLogin token={token}"
 
 	try:
-		response = requests.get(url, headers=headers)
+		response = session.get(url, headers=headers)
 		response.raise_for_status()
 		return response.json()
 	except requests.exceptions.RequestException as e:
@@ -63,7 +63,7 @@ def get_all_objects_for_system_dynamic_entity(entity_name, token=None):
 		headers["Authorization"] = f"DirectLogin token={token}"
 
 	try:
-		response = requests.get(url, headers=headers)
+		response = session.get(url, headers=headers)
 		response.raise_for_status()
 		return response.json()
 	except requests.exceptions.HTTPError as e:
@@ -93,7 +93,7 @@ def delete_object_for_system_dynamic_entity(entity_name, object_id, token=None):
 		headers["Authorization"] = f"DirectLogin token={token}"
 
 	try:
-		response = requests.delete(url, headers=headers)
+		response = session.delete(url, headers=headers)
 		response.raise_for_status()
 		return response.json()
 	except requests.exceptions.RequestException as e:
@@ -115,7 +115,7 @@ def delete_system_dynamic_entity(entity_id, token=None):
 		headers["Authorization"] = f"DirectLogin token={token}"
 
 	try:
-		response = requests.delete(url, headers=headers)
+		response = session.delete(url, headers=headers)
 		response.raise_for_status()
 		return response.json()
 	except requests.exceptions.RequestException as e:

@@ -30,7 +30,7 @@ import re
 
 import requests
 
-from obp_client import token as default_token, obp_host
+from obp_client import token as default_token, obp_host, session
 from obp_space import record_path
 from parse_minimum_fields import parse_xlsx_entities
 from timing import print_slowest, timed
@@ -313,7 +313,7 @@ def existing_object_ids(entity_name, token=None):
     if token:
         headers["Authorization"] = f"DirectLogin token={token}"
     try:
-        response = requests.get(url, headers=headers)
+        response = session.get(url, headers=headers)
         response.raise_for_status()
         rows = response.json().get(f"{entity_name}_list", [])
     except Exception as e:
@@ -328,7 +328,7 @@ def create_object(entity_name, data, token=None):
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"DirectLogin token={token}"
-    response = requests.post(url, headers=headers, json=data)
+    response = session.post(url, headers=headers, json=data)
     response.raise_for_status()
     return response.json()
 

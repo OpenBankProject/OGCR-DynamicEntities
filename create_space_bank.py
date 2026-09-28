@@ -16,13 +16,13 @@ import sys
 
 import requests
 
-from obp_client import token, obp_host
+from obp_client import token, obp_host, session
 from obp_space import SPACE_ID
 
 
 def get_bank(bank_id):
 	"""Return the bank JSON, or None if it does not exist. Raises on other errors."""
-	response = requests.get(f"{obp_host}/obp/v6.0.0/banks/{bank_id}",
+	response = session.get(f"{obp_host}/obp/v6.0.0/banks/{bank_id}",
 		headers={"Authorization": f"DirectLogin token={token}"}, timeout=30)
 	if response.status_code == 404:
 		return None
@@ -40,7 +40,7 @@ def create_bank(bank_id, full_name):
 		"website": "",
 		"bank_routings": [{"scheme": "OBP", "address": bank_id}],
 	}
-	response = requests.post(f"{obp_host}/obp/v6.0.0/banks", json=body,
+	response = session.post(f"{obp_host}/obp/v6.0.0/banks", json=body,
 		headers={"Authorization": f"DirectLogin token={token}"}, timeout=30)
 	if response.status_code not in (200, 201):
 		raise RuntimeError(f"Creating bank '{bank_id}' failed ({response.status_code}): {response.text}")

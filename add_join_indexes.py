@@ -27,9 +27,8 @@ import copy
 import json
 import sys
 
-import requests
 
-from obp_client import token as TOKEN, obp_host as HOST
+from obp_client import token as TOKEN, obp_host as HOST, session
 from obp_space import record_path
 from obp_dynamic_api import (
     list_system_dynamic_entities,
@@ -76,7 +75,7 @@ def verify(base_url, token):
         "?obp_exists[activity_verification]=filter[status_code]=eq:verified"
     )
     headers = {"Authorization": f"DirectLogin token={token}"}
-    resp = requests.get(url, headers=headers)
+    resp = session.get(url, headers=headers)
     print(f"GET {url}\n-> HTTP {resp.status_code}")
     try:
         body = resp.json()

@@ -21,13 +21,11 @@ Exits 0 when the dry run completed (whatever it found), 1 if OBP could not be re
 
 import sys
 
-import requests
-
 from check_min_field_matrix import check as check_sheet
 from create_space_bank import get_bank
 from fixtures import fixture_records
 from get_and_delete_dynamic_entities import get_all_system_dynamic_entities
-from obp_client import token, obp_host
+from obp_client import token, obp_host, session
 from obp_space import ROLE_BANK_ID, SPACE_ID, describe
 from ogcr_log_entity import LOG_ENTITY_NAME
 from parse_minimum_fields import parse_xlsx_entities
@@ -63,7 +61,7 @@ def main():
 	if not token:
 		say("✗ DirectLogin failed; cannot read OBP")
 		return 1
-	user = requests.get(f"{obp_host}/obp/v6.0.0/users/current",
+	user = session.get(f"{obp_host}/obp/v6.0.0/users/current",
 		headers={"Authorization": f"DirectLogin token={token}"}, timeout=30).json()
 
 	heading("Nothing below is carried out. This only reports what would happen.")

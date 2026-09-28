@@ -30,9 +30,9 @@ import argparse
 import sys
 
 import pandas as pd
-import requests
 
 from check_min_field_matrix import has_green_checkmark
+from obp_client import session
 from create_role_groups import USERS_URL, get_group_members, get_groups_at_space, headers
 from obp_space import ROLE_BANK_ID
 
@@ -84,7 +84,7 @@ def find_user(username, provider):
 	params = {"username": username, "limit": 50}
 	if provider:
 		params["provider"] = provider
-	response = requests.get(USERS_URL, params=params, headers=headers(), timeout=30)
+	response = session.get(USERS_URL, params=params, headers=headers(), timeout=30)
 	if not response.ok:
 		return None, f"lookup failed: {response.status_code} {response.text}"
 	found = response.json().get("users", [])
@@ -172,7 +172,7 @@ def main():
 			print(f"    {tag}+ ADD to {name!r}")
 			if args.dry_run:
 				continue
-			response = requests.post(f"{USERS_URL}/{user_id}/group-entitlements",
+			response = session.post(f"{USERS_URL}/{user_id}/group-entitlements",
 				json={"group_id": on_obp[name]["group_id"]}, headers=headers(), timeout=30)
 			if response.ok:
 				print(f"      ✓ {len(response.json().get('entitlements_created', []))} Role(s) granted")

@@ -1,3 +1,4 @@
+import http.cookiejar
 import os
 from dotenv import load_dotenv
 import requests
@@ -11,6 +12,13 @@ logging.basicConfig(level=obp_log_level)
 logger = logging.getLogger("obp")
 logger.propagate = True
 
+# One HTTP session for every call to OBP, so connections are reused rather than
+# reopened for each request (saves ~60 ms a request against a remote HTTPS host).
+# It only pools connections: callers still pass their own headers (and token) on
+# each call, and cookies are not kept, so one call never affects the next.
+session = requests.Session()
+session.cookies.set_policy(http.cookiejar.DefaultCookiePolicy(allowed_domains=[]))
+
 
 def create_direct_login_token(username, user_password, consumer_key, obp_api_host, verify=True):
 	authorization = f"DirectLogin username={username},password={user_password},consumer_key={consumer_key}"
@@ -19,7 +27,7 @@ def create_direct_login_token(username, user_password, consumer_key, obp_api_hos
 	payload = None
 	url = obp_api_host + "/my/logins/direct"
 	try:
-		req = requests.post(url, headers=headers, json=payload, verify=verify)
+		req = session.post(url, headers=headers, json=payload, verify=verify)
 		response_json = loads(req.text)
 		if "token" not in response_json:
 			logger.error(f"DirectLogin failed for user '{username}' at {url}")
@@ -38,7 +46,7 @@ def check_obp_api_health(base_url):
 	url = f"{base_url}/obp/v6.0.0/root"
 	logger.info(f"Checking OBP API health at: {url}")
 	try:
-		response = requests.get(url, timeout=10)
+		response = session.get(url, timeout=10)
 		response.raise_for_status()
 		logger.info("OBP API is reachable")
 	except requests.exceptions.ConnectionError:

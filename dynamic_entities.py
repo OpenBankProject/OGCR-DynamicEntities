@@ -1,7 +1,7 @@
 import requests
 import logging
 import json
-from obp_client import token, obp_host
+from obp_client import token, obp_host, session
 from obp_dynamic_api import tag_description_with_ogcr
 from obp_space import management_path
 
@@ -68,7 +68,7 @@ def create_system_dynamic_entity(entity_definition, token=None):
 		headers["Authorization"] = f"DirectLogin token={token}"
 
 	try:
-		response = requests.post(url, headers=headers, json=entity_definition)
+		response = session.post(url, headers=headers, json=entity_definition)
 		response.raise_for_status()
 		return response.json()
 	except requests.exceptions.RequestException as e:
@@ -481,7 +481,7 @@ def add_entitlement_to_user(token, user_id, role_name, bank_id=""):
 	}
 
 	try:
-		response = requests.post(url, headers=headers, json=data)
+		response = session.post(url, headers=headers, json=data)
 	except requests.exceptions.RequestException as e:
 		logger.error(f"Error adding entitlement to user: {e}")
 	print(response, response.text if not response.ok else "")

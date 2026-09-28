@@ -15,6 +15,8 @@ POSSIBLE ERRORS it can report (the sheet does not say what it means):
   - reference to an entity not defined in the sheet and not built into OBP
     (the parser silently makes it a string)
   - two fields in one entity that end up with the same name
+  - Role Group matrix (columns R onwards, see role_groups.py): a cell that is
+    not made of the letters C R U D, or two groups with the same name
 POSSIBLE WARNINGS it can report (probably fine, worth a look):
   - no END_OF_FILE marker
   - included field with an empty type (becomes a string)
@@ -22,6 +24,8 @@ POSSIBLE WARNINGS it can report (probably fine, worth a look):
   - example that does not fit its type (integer, number, boolean,
     DATE_WITH_DAY, json)
   - type written in a different case (e.g. `Integer`)
+  - Role Group matrix: access on a field row instead of an `Entity:` row
+    (ignored), lower case letters, or a repeated letter
 
 Usage:
     python3 check_min_field_matrix.py [path/to/min_field_matrix.xlsx] [--strict]
@@ -39,6 +43,8 @@ import sys
 from pathlib import Path
 
 import pandas as pd
+
+from role_groups import parse_role_groups
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_INPUT = "min_field_matrix.xlsx"
@@ -204,6 +210,10 @@ def check(file_path):
 		if target not in entities:
 			errors.append(f"{cell}: {entity}.{field} {declared!r} points to an entity not defined in the sheet "
 				"(will be a string)")
+
+	_, group_errors, group_warnings = parse_role_groups(file_path)
+	errors.extend(group_errors)
+	warnings.extend(group_warnings)
 
 	return errors, warnings, len(entities)
 

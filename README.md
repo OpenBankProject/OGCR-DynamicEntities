@@ -20,6 +20,8 @@ pip install -r requirements.txt
 - **`check_min_field_matrix.py`** / **`.sh`**: Check the spreadsheet for problems before creating anything (offline, read-only).
 - **`check_login_and_roles.py`** / **`.sh`**: Check DirectLogin works and the user holds the Roles the entities need (read-only).
 - **`create_entitlements.py`** / **`.sh`**: Grant the logged in user those Roles.
+- **`create_role_groups.py`** / **`.sh`**: Create or update the OBP Groups defined by the spreadsheet's Role Group matrix (columns R onwards).
+- **`role_groups.py`**: Reads that matrix (offline; used by the checker and `create_role_groups.py`).
 - **`dry_run_create_ogcr_entities.py`** / **`.sh`**: DRY RUN of `recreate_ogcr_entities.sh` — says what it would do, changes nothing.
 - **`create_space_bank.py`** / **`.sh`**: Create the `OBP_ENTITY_SPACE_ID` bank if it doesn't exist.
 - **`obp_space.py`**: The one place that builds dynamic-entity URLs and Role bank ids from `OBP_ENTITY_SPACE_ID`.
@@ -101,6 +103,7 @@ Possible errors it can report:
 - unknown type in column D, or a misspelt `reference:` (e.g. `referece:`) — would become a string
 - `reference:<entity>` to an entity not defined in the sheet (and not built into OBP) — would become a string
 - two fields in one entity that end up with the same name
+- a Role Group cell that isn't made of the letters `C R U D`, or two groups with the same name
 
 Possible warnings it can report:
 - no `END_OF_FILE` row in column A
@@ -108,6 +111,7 @@ Possible warnings it can report:
 - field name changed by sanitising (e.g. `monitoring period` → `monitoring_period`)
 - example in column G that does not fit its type (integer, number, boolean, `DATE_WITH_DAY`, json)
 - type in the wrong case (e.g. `Integer`)
+- Role Group access on a field row instead of the `Entity:` row (ignored), in lower case, or with a repeated letter
 
 The output lists only the problems actually found (`ERRORS FOUND` / `WARNINGS FOUND`). Exit code: `0` no errors, `1` errors (or warnings with `--strict`).
 
@@ -169,6 +173,28 @@ Grant the logged in user any missing Roles (entities read from `entities_output.
 ```
 
 Roles already held come back as `409 already exists`, which is harmless. A record Role can only be granted once its entity exists on OBP (otherwise `400 Unknown role`), so run this after creating the entities. Granting Roles itself needs `CanCreateEntitlementAtAnyBank` (or `CanCreateEntitlementAtOneBank` at the space's bank id).
+
+**Role Groups (`create_role_groups.sh`)**
+
+The spreadsheet's first sheet has a Role Group matrix, starting at column R and running right until the first empty header. Row 1 holds each group's name (R1 = `Operator`, S1 = `Certification Scheme`, T1 = `Certification Body`, U1 = `Parcel Owner Verifier`). Where a group's column crosses an `Entity: <name>` row, the letters say which of that entity's record endpoints the group may call:
+
+| Letter | Endpoints | Role |
+|---|---|---|
+| `C` | POST | `CanCreateDynamicEntityRecord_<entity>` |
+| `R` | GET list and GET one | `CanGetDynamicEntityRecord_<entity>` |
+| `U` | PUT | `CanUpdateDynamicEntityRecord_<entity>` |
+| `D` | DELETE | `CanDeleteDynamicEntityRecord_<entity>` |
+
+Any combination works (`R`, `CR`, `CRUD`, ...); empty means no access. Only the `Entity:` rows count; `check_min_field_matrix.sh` flags anything else.
+
+`create_role_groups.sh` makes each column an OBP Group (`/obp/v6.0.0/management/groups`) with those Roles, at the bank id of the space (`OBP_ENTITY_SPACE_ID`, or `SYS` for system level) — the same bank id the Roles are checked at. A group that already exists there with the same name has its Roles replaced by the sheet's; other groups are left alone.
+
+```bash
+./create_role_groups.sh --dry-run      # say what would be created / updated
+./create_role_groups.sh                # do it
+```
+
+Then add users to a group with `POST /obp/v6.0.0/users/USER_ID/group-entitlements` (`{"group_id": "..."}`), which grants them the group's Roles. OBP copies the Roles at the moment a user is added, so after changing the sheet and re-running, remove and re-add existing members to pick up the change. The groups don't depend on the entities existing and aren't touched by `recreate_ogcr_entities.sh`. Needs `CanCreateGroupAtOneBank`, `CanUpdateGroupAtOneBank` and `CanGetGroupsAtOneBank` at the space's bank id (or the `...AtAllBanks` versions); adding members needs `CanAddUserToGroupAtOneBank`.
 
 **Create dummy data**
 

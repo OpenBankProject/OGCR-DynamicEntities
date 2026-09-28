@@ -22,6 +22,7 @@ pip install -r requirements.txt
 - **`create_entitlements.py`** / **`.sh`**: Grant the logged in user those Roles.
 - **`create_role_groups.py`** / **`.sh`**: Create or update the OBP Groups defined by the spreadsheet's Role Group matrix (columns R onwards).
 - **`add_users_to_groups.py`** / **`.sh`**: Add users to those groups, as ticked in `DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx`.
+- **`show_user_dynamic_entity_roles.py`** / **`.sh`**, **`show_user_dynamic_entity_paths.py`** / **`.sh`**, **`grant_user_dynamic_entity_roles.py`** / **`.sh`**: Look at, or grant, one user's dynamic entity Roles (see "One user's dynamic entity Roles").
 - **`role_groups.py`**: Reads that matrix (offline; used by the checker and `create_role_groups.py`).
 - **`dry_run_create_ogcr_entities.py`** / **`.sh`**: DRY RUN of `recreate_ogcr_entities.sh` — says what it would do, changes nothing.
 - **`create_space_bank.py`** / **`.sh`**: Create the `OBP_ENTITY_SPACE_ID` bank if it doesn't exist.
@@ -186,6 +187,24 @@ Grant the logged in user any missing Roles (entities read from `entities_output.
 ```
 
 Roles the user already holds are skipped (it reads the current user's entitlements first) and only the missing ones are requested; it lists what it granted and exits 1 if any grant failed. A record Role can only be granted once its entity exists on OBP (otherwise `400 Unknown role`), so run this after creating the entities. Granting Roles itself needs `CanCreateEntitlementAtAnyBank` (or `CanCreateEntitlementAtOneBank` at the space's bank id).
+
+**One user's dynamic entity Roles**
+
+Three scripts for any user, named by their username. That's the user you look at or grant to, not the one logged in from `.env`. Add `--provider` if the username exists at more than one provider.
+
+```bash
+./show_user_dynamic_entity_roles.sh lantonic                  # their dynamic entity entitlements at system level (SYS or empty bank id)
+./show_user_dynamic_entity_roles.sh lantonic --bank-id ogcr   # ... or at one bank id
+./show_user_dynamic_entity_paths.sh lantonic                  # every record path those Roles open
+./grant_user_dynamic_entity_roles.sh lantonic --entity parcel --entity activity           # CRUD at SYS
+./grant_user_dynamic_entity_roles.sh lantonic --entity supporting_document --access R --bank-id ogcr --dry-run
+```
+
+`show_user_dynamic_entity_paths.sh` prints one path per line. The v7.0.0 paths come first (`/obp/v7.0.0/banks/BANK_ID/dynamic-entities/ENTITY[/ID]`, banks such as `ogcr` first, then `SYS`), then the legacy ones (`/obp/dynamic-entity/[banks/BANK_ID/]ENTITY[/ID]`). A path to an entity that isn't defined in its space is marked `404`.
+
+`grant_user_dynamic_entity_roles.sh` takes the entities with `--entity` (repeat it), and the Roles as the letters `C R U D`, like the Role Group matrix (`--access`, default `CRUD`), at `--bank-id` (default `SYS`). It grants only the Roles the user doesn't already hold at that bank id. It lists them and asks before granting, because the user gets an email for each one; `--dry-run` only lists them.
+
+The show scripts only read, and need `CanGetAnyUser`. Checking that entities exist also needs `CanGetDynamicEntityDefinitions` at their bank id. Granting needs `CanCreateEntitlementAtAnyBank`.
 
 **Role Groups (`create_role_groups.sh`)**
 

@@ -10,6 +10,8 @@ When OBP_ENTITY_SPACE_ID is set it also checks that bank exists.
 Roles checked, at the bank id of the entities' space (OBP_ENTITY_SPACE_ID, or
 SYS for system level; see obp_space.py):
   - the entity DEFINITION Roles
+  - the Roles for managing the Role Groups and adding users to them (see
+    role_groups.py; the user lookup ones are system level)
   - the entity RECORD Roles for every `Entity: <name>` in the parsed entities
     file (default `entities_output.txt`)
   - any extra Roles passed with --role (at the empty bank id, or
@@ -33,6 +35,7 @@ import requests
 from dotenv import load_dotenv
 
 from obp_space import ROLE_BANK_ID, SPACE_ID, describe
+from role_groups import GROUP_ADMIN_ROLES
 
 load_dotenv()
 
@@ -114,7 +117,7 @@ def get_current_user(host, token):
 
 def required_roles(args):
 	"""Return a list of (role_name, bank_id) pairs to check."""
-	roles = [(r, ROLE_BANK_ID) for r in META_ROLE_NAMES]
+	roles = [(r, ROLE_BANK_ID) for r in META_ROLE_NAMES] + list(GROUP_ADMIN_ROLES)
 	if not args.no_entities:
 		if os.path.exists(args.file):
 			for name in parse_entity_names(args.file):

@@ -13,8 +13,8 @@
 #
 # Notes:
 #   - Credentials/host come from your .env, same as the Python scripts.
-#   - Members whose Roles no longer match their group are removed from it and
-#     added back, so they pick up the change.
+#   - Members stay in their groups: they are granted only Roles new to them
+#     (one email each) and lose the ones taken out of the group.
 
 set -euo pipefail
 

@@ -12,20 +12,23 @@ the sheet's, so it always matches the sheet. Groups there that are not in the
 sheet are left alone.
 
 OBP copies a group's Roles to a user when the user is ADDED to the group, so
-changing the group does not change its existing members' Roles. Any member whose
-group-granted Roles differ from the group's is therefore removed from the group
-and added back. Members are found from the entitlements the group has granted.
+changing the group does not change its existing members' Roles. The members are
+therefore brought up to date in place, without leaving the group:
+  - a Role added to the group, that a member does not hold at all, is granted by
+    adding them to the group again (OBP only creates the Roles they lack);
+  - a Role taken out of the group has the member's entitlement for it, granted
+    by this group, deleted.
+Members are found from the entitlements the group has granted.
 
 Needs CanCreateGroupAtOneBank, CanUpdateGroupAtOneBank and CanGetGroupsAtOneBank
-at that bank id (or the ...AtAllBanks versions); refreshing members also needs
-CanGetEntitlementsForAnyBank, CanRemoveUserFromGroupAtOneBank and
-CanAddUserToGroupAtOneBank.
+at that bank id (or the ...AtAllBanks versions); updating members also needs
+CanGetEntitlementsForAnyBank, CanGetAnyUser, CanAddUserToGroupAtOneBank and
+CanDeleteEntitlementAtAnyBank.
 
 Usage:
     python3 create_role_groups.py [path/to/min_field_matrix.xlsx] [--dry-run]
 
 Exits 0 on success, 1 if the sheet has errors in the matrix or anything failed.
-A member removed but not added back is reported as NOT RE-ADDED; add them by hand.
 """
 
 import argparse
@@ -63,57 +66,89 @@ def get_groups_at_space():
 
 
 def get_group_members(group_id):
-	"""{user_id: {"username", "roles"}} of a group's members, from the entitlements it granted.
+	"""{user_id: {"username", "roles", "entitlement_ids"}} of a group's members, from the
+	entitlements it granted (`entitlement_ids` maps role -> entitlement id).
 	A member holding none of the group's Roles through it (e.g. the group had none) is not seen."""
 	response = requests.get(f"{GROUPS_URL}/{group_id}/entitlements", headers=headers(), timeout=30)
 	if not response.ok:
 		raise RuntimeError(f"{response.status_code} {response.text}")
 	members = {}
 	for e in response.json().get("entitlements", []):
-		member = members.setdefault(e["user_id"], {"username": e.get("username", ""), "roles": set()})
+		member = members.setdefault(e["user_id"],
+			{"username": e.get("username", ""), "roles": set(), "entitlement_ids": {}})
 		member["roles"].add(e["role_name"])
+		member["entitlement_ids"][e["role_name"]] = e["entitlement_id"]
 	return members
 
 
-def refresh_members(group_id, roles, dry_run, tag):
-	"""Remove and re-add each member whose group-granted Roles differ from `roles`.
-	Returns the number of members that failed."""
+def get_roles_held(user_id):
+	"""The Roles a user holds at ROLE_BANK_ID, however they were granted."""
+	response = requests.get(USERS_URL, params={"user_id": user_id}, headers=headers(), timeout=30)
+	if not response.ok:
+		raise RuntimeError(f"{response.status_code} {response.text}")
+	users = response.json().get("users", [])
+	entitlements = users[0].get("entitlements", {}).get("list", []) if users else []
+	return {e.get("role_name") for e in entitlements if e.get("bank_id", "") == ROLE_BANK_ID}
+
+
+def sync_members(group_id, roles, dry_run, tag):
+	"""Bring each member's Roles in line with the group's `roles`, without taking
+	them out of the group. Returns the number of failures."""
 	try:
 		members = get_group_members(group_id)
 	except Exception as e:
 		print(f"  ✗ Could not list the members: {e}")
 		return 1
-	stale = {uid: m for uid, m in members.items() if m["roles"] != set(roles)}
-	if members:
-		print(f"  {len(members)} member(s), {len(stale)} to refresh")
 	failed = 0
-	for user_id, member in stale.items():
+	updated = 0
+	for user_id, member in members.items():
 		who = f"{member['username']} ({user_id})"
-		gained = sorted(set(roles) - member["roles"])
 		lost = sorted(member["roles"] - set(roles))
-		print(f"  {tag}REFRESH {who}: +{len(gained)} -{len(lost)} Role(s)")
+		# Roles the group grants that the member lacks. A Role shared with another group the
+		# member is in stays recorded against that group, so only count ones not held at all.
+		gained = sorted(set(roles) - member["roles"])
+		if gained:
+			try:
+				held = get_roles_held(user_id)
+			except Exception as e:
+				failed += 1
+				print(f"  ✗ {who}: could not read their Roles: {e}")
+				continue
+			gained = [r for r in gained if r not in held]
+		if not gained and not lost:
+			continue
+		updated += 1
+		print(f"  {tag}UPDATE member {who}: +{len(gained)} -{len(lost)} Role(s)")
+		for r in gained:
+			print(f"      + {r}")
+		for r in lost:
+			print(f"      - {r}")
 		if dry_run:
 			continue
-		response = requests.delete(f"{USERS_URL}/{user_id}/group-entitlements/{group_id}",
-			headers=headers(), timeout=30)
-		if not response.ok:
-			failed += 1
-			print(f"    ✗ remove failed, left as it was: {response.status_code} {response.text}")
-			continue
-		response = requests.post(f"{USERS_URL}/{user_id}/group-entitlements", json={"group_id": group_id},
-			headers=headers(), timeout=30)
-		if response.ok:
-			print(f"    ✓ re-added, {len(response.json().get('entitlements_created', []))} Role(s) granted")
-		else:
-			failed += 1
-			print(f"    ✗ NOT RE-ADDED: {who} was removed from the group but could not be added back; "
-				f"add them by hand. {response.status_code} {response.text}")
+		if gained:
+			# Adding an existing member again grants only the Roles they do not hold.
+			response = requests.post(f"{USERS_URL}/{user_id}/group-entitlements", json={"group_id": group_id},
+				headers=headers(), timeout=30)
+			if response.ok:
+				print(f"    ✓ {len(response.json().get('entitlements_created', []))} Role(s) granted")
+			else:
+				failed += 1
+				print(f"    ✗ grant failed: {response.status_code} {response.text}")
+		for r in lost:
+			response = requests.delete(f"{obp_host}/obp/v6.0.0/entitlements/{member['entitlement_ids'][r]}",
+				headers=headers(), timeout=30)
+			if response.ok:
+				print(f"    ✓ removed {r}")
+			else:
+				failed += 1
+				print(f"    ✗ could not remove {r}: {response.status_code} {response.text}")
+	if members:
+		print(f"  {len(members)} member(s), {updated} to update")
 	return failed
 
 
-def description_for(group, spreadsheet):
-	return (f"OGCR Role Group from column {group['column']} of {spreadsheet}: "
-		+ ", ".join(f"{entity} {access}" for entity, access in group["access"].items()))
+# Earlier versions of this script wrote a generated description starting with this; it is cleared.
+OLD_GENERATED_DESCRIPTION = "OGCR Role Group from column "
 
 
 def main():
@@ -160,13 +195,17 @@ def main():
 	for group in groups:
 		name = group["name"]
 		roles = group_roles(group)
+		# No description is set; OBP requires the field on create, so it is empty.
 		body = {
 			"group_name": name,
-			"group_description": description_for(group, args.file),
 			"list_of_roles": roles,
 			"is_enabled": True,
 		}
 		existing = on_obp.get(name)
+		clear_description = existing is not None and \
+			(existing.get("group_description") or "").startswith(OLD_GENERATED_DESCRIPTION)
+		if clear_description:
+			body["group_description"] = ""
 		if existing is None:
 			if not roles:
 				print(f"{tag}Skipping {name!r} (column {group['column']}): no access ticked")
@@ -176,16 +215,15 @@ def main():
 				print(f"    + {r}")
 			if args.dry_run:
 				continue
-			response = requests.post(GROUPS_URL, json={**body, "bank_id": ROLE_BANK_ID},
+			response = requests.post(GROUPS_URL, json={**body, "bank_id": ROLE_BANK_ID, "group_description": ""},
 				headers=headers(), timeout=30)
 		else:
 			before = set(existing.get("list_of_roles") or [])
 			added = [r for r in roles if r not in before]
 			removed = sorted(before - set(roles))
-			if not added and not removed and existing.get("is_enabled") \
-					and existing.get("group_description") == body["group_description"]:
+			if not added and not removed and existing.get("is_enabled") and not clear_description:
 				print(f"{tag}Unchanged group {name!r} ({existing['group_id']}): {len(roles)} Role(s)")
-				failed += refresh_members(existing["group_id"], roles, args.dry_run, tag)
+				failed += sync_members(existing["group_id"], roles, args.dry_run, tag)
 				continue
 			print(f"{tag}UPDATE group {name!r} ({existing['group_id']}): {len(roles)} Role(s)")
 			for r in added:
@@ -194,6 +232,8 @@ def main():
 				print(f"    - {r}")
 			if not existing.get("is_enabled"):
 				print("    enable it")
+			if clear_description:
+				print("    clear the generated description")
 			if not args.dry_run:
 				response = requests.put(f"{GROUPS_URL}/{existing['group_id']}", json=body,
 					headers=headers(), timeout=30)
@@ -202,7 +242,7 @@ def main():
 					print(f"  ✗ {response.status_code} {response.text}")
 					continue  # members stay as they are
 				print(f"  ✓ {response.json().get('group_id')}")
-			failed += refresh_members(existing["group_id"], roles, args.dry_run, tag)
+			failed += sync_members(existing["group_id"], roles, args.dry_run, tag)
 			continue
 
 		if response.ok:

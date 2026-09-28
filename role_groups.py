@@ -20,6 +20,8 @@ import re
 
 import pandas as pd
 
+from obp_space import ROLE_BANK_ID
+
 END_MARKER = "END_OF_FILE"
 # Column R. The sheet says not to move columns, so the matrix starts here.
 FIRST_GROUP_COLUMN = 17
@@ -31,6 +33,19 @@ ROLE_PREFIX_BY_LETTER = {
 	"D": "CanDeleteDynamicEntityRecord_",
 }
 ACCESS_ORDER = "CRUD"
+
+# The Roles that create_role_groups.py and add_users_to_groups.py need, as
+# (role_name, bank_id): the group Roles at the bank id of the space, the user
+# lookup and group-member listing at system level (empty bank id).
+GROUP_ADMIN_ROLES = [
+	("CanCreateGroupAtOneBank", ROLE_BANK_ID),
+	("CanUpdateGroupAtOneBank", ROLE_BANK_ID),
+	("CanGetGroupsAtOneBank", ROLE_BANK_ID),
+	("CanAddUserToGroupAtOneBank", ROLE_BANK_ID),
+	("CanGetEntitlementsForAnyBank", ""),
+	("CanGetAnyUser", ""),
+	("CanDeleteEntitlementAtAnyBank", ""),
+]
 
 
 def column_letter(idx):

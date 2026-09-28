@@ -29,6 +29,8 @@ import argparse
 import logging
 import sys
 
+from timing import print_slowest, timed
+
 from obp_client import token as default_token
 from get_and_delete_dynamic_entities import (
 	get_all_system_dynamic_entities,
@@ -120,14 +122,16 @@ def wipe_target_entities(target_names, token):
 
 		# Delete objects first (frees object-level FK references), then definitions.
 		for name in present:
-			progress += _delete_objects_for_entity(name, token)
+			with timed(f"delete records of {name}"):
+				progress += _delete_objects_for_entity(name, token)
 
 		for name, entity_id in present.items():
 			if not entity_id:
 				logger.error(f"  ✗ Missing entity id for {name}, cannot delete definition")
 				continue
 			try:
-				delete_system_dynamic_entity(entity_id, token=token)
+				with timed(f"delete definition of {name}"):
+					delete_system_dynamic_entity(entity_id, token=token)
 				logger.info(f"  ✓ Deleted entity definition: {name} ({entity_id})")
 				progress += 1
 			except Exception as e:
@@ -210,6 +214,7 @@ def main():
 	remaining = wipe_target_entities(target_names, args.token)
 
 	print_separator()
+	print_slowest()
 	if not remaining:
 		logger.info("✓ All target OGCR entities deleted.")
 		print_separator("=")

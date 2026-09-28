@@ -13,6 +13,7 @@ from obp_dynamic_api import create_dynamic_entity_from_parsed
 import argparse
 import os
 import datetime
+from timing import print_slowest, timed
 
 
 def _has_green_checkmark(cell_value):
@@ -245,17 +246,18 @@ def _create_entities_two_pass(entities, token=None, host=None, has_personal=Fals
 		public_access = wrapper.get("public_access", False) if isinstance(wrapper, dict) else False
 		print(f"Processing entity: {entity_name}{' (public read)' if public_access else ''} ...")
 		try:
-			resp = create_dynamic_entity_from_parsed(
-				entity_name,
-				fields,
-				token=token,
-				base_url=host,
-				has_personal=has_personal,
-				has_community=has_community,
-				has_public=public_access,
-				entity_description=description,
-				downgrade_references=True,
-			)
+			with timed(f"create entity {entity_name}"):
+				resp = create_dynamic_entity_from_parsed(
+					entity_name,
+					fields,
+					token=token,
+					base_url=host,
+					has_personal=has_personal,
+					has_community=has_community,
+					has_public=public_access,
+					entity_description=description,
+					downgrade_references=True,
+				)
 			dyn_id = resp.get("dynamicEntityId", "<no-id>")
 			created_ids[entity_name] = dyn_id
 			print(f"  {'Exists' if resp.get('existing') else 'Created'}: {dyn_id}")
@@ -293,7 +295,8 @@ def _create_entities_two_pass(entities, token=None, host=None, has_personal=Fals
 				entity_description=description,
 				allowed_reference_types=allowed_refs,
 			)
-			update_system_dynamic_entity(dyn_id, entity_def, token=token, base_url=host)
+			with timed(f"restore references of {entity_name}"):
+				update_system_dynamic_entity(dyn_id, entity_def, token=token, base_url=host)
 			print(f"  Restored references: {entity_name}")
 		except Exception as e:
 			print(f"  Failed to restore references for {entity_name}: {e}")
@@ -376,6 +379,7 @@ def main():
 				has_personal=has_personal,
 				has_community=has_community,
 			)
+			print_slowest()
 			return
 
 		# --update: refresh existing entities in place. Validate references

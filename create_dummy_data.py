@@ -33,6 +33,7 @@ import requests
 from obp_client import token as default_token, obp_host
 from obp_space import record_path
 from parse_minimum_fields import parse_xlsx_entities
+from timing import print_slowest, timed
 from fixtures import fixture_records, resolve_name_field
 from ogcr_log_entity import (
     ensure_log_entity,
@@ -468,6 +469,11 @@ def main():
         )
 
     def _attempt(ename):
+        # Includes writing the audit log record(s), which is part of the cost.
+        with timed(f"example data for {ename}"):
+            _attempt_untimed(ename)
+
+    def _attempt_untimed(ename):
         # Controlled vocabularies get their full fixed list, not one example row.
         if fixture_records(ename):
             _attempt_fixture(ename)
@@ -548,6 +554,7 @@ def main():
         f"Dummy Data Summary: {counters['created']} created, "
         f"{counters['skipped']} already present, {counters['failed']} failed"
     )
+    print_slowest()
     print_separator("=")
 
 

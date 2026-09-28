@@ -141,3 +141,6 @@ entities_output.txt
 # Real user data (usernames, group memberships). Never commit.
 DO_NOT_COMMIT/
 *DO_NOT_COMMIT*
+
+# Run logs of recreate_ogcr_entities.sh (can hold real usernames). Never commit.
+logs/

@@ -129,6 +129,10 @@ After the entities and example data, it also runs `create_role_groups.py` (step 
 ./recreate_ogcr_entities.sh --only          # entities and example data only
 ```
 
+To see what takes a while: each step prints `⏱ <step>: <seconds>`, and a table of all the step times and the total is printed at the end, also when a step fails. Inside steps 1–3, each entity's delete, create, reference restore and example data gets its own `⏱` line if it takes over 1s, and each of those scripts ends with its 5 slowest operations. The example data timings include writing the audit log records.
+
+Each run also writes a complete log to `logs/recreate_ogcr_entities_<date>-<time>.log`: everything printed on the console (errors included), plus every timing, including the ones under 1s that the console leaves out. It starts with a header giving the host, space, sheet, git commit and options, so it can be handed as-is to someone, or an agent, looking into the dynamic entities. The path is printed at the start and end of the run. `logs/` is git-ignored, because step 5 can write real usernames into it.
+
 A clean wipe-and-recreate driven entirely by the spreadsheet (this is what `main.py` does *not* do — `main.py` is tied to the hardcoded list in `dynamic_entities.py`):
 
 1. **Parse and save** the entity list to `entities_output.txt`:
@@ -162,6 +166,7 @@ Notes:
 Every entity needs Roles, all granted at the bank id of the space (`OBP_ENTITY_SPACE_ID`, or `SYS` for system level):
 - definition Roles: `CanCreateDynamicEntityDefinition`, `CanDeleteDynamicEntityDefinition`, `CanGetDynamicEntityDefinitions`, `CanUpdateDynamicEntityDefinition`
 - record Roles, per entity: `CanCreateDynamicEntityRecord_<entity>`, and the same for `Delete`, `Get` and `Update`
+- Role Group Roles, for steps 4 and 5 of `recreate_ogcr_entities.sh`: `CanCreateGroupAtOneBank`, `CanUpdateGroupAtOneBank`, `CanGetGroupsAtOneBank`, `CanAddUserToGroupAtOneBank`; plus `CanGetEntitlementsForAnyBank`, `CanGetAnyUser` and `CanDeleteEntitlementAtAnyBank` at system level (empty bank id)
 
 Check that login works and which Roles are missing (read-only):
 
@@ -180,7 +185,7 @@ Grant the logged in user any missing Roles (entities read from `entities_output.
 ./create_entitlements.sh
 ```
 
-Roles already held come back as `409 already exists`, which is harmless. A record Role can only be granted once its entity exists on OBP (otherwise `400 Unknown role`), so run this after creating the entities. Granting Roles itself needs `CanCreateEntitlementAtAnyBank` (or `CanCreateEntitlementAtOneBank` at the space's bank id).
+Roles the user already holds are skipped (it reads the current user's entitlements first) and only the missing ones are requested; it lists what it granted and exits 1 if any grant failed. A record Role can only be granted once its entity exists on OBP (otherwise `400 Unknown role`), so run this after creating the entities. Granting Roles itself needs `CanCreateEntitlementAtAnyBank` (or `CanCreateEntitlementAtOneBank` at the space's bank id).
 
 **Role Groups (`create_role_groups.sh`)**
 
@@ -202,7 +207,7 @@ Any combination works (`R`, `CR`, `CRUD`, ...); empty means no access. Only the 
 ./create_role_groups.sh                # do it
 ```
 
-Add users to a group with `POST /obp/v6.0.0/users/USER_ID/group-entitlements` (`{"group_id": "..."}`), which grants them the group's Roles. OBP copies the Roles at the moment a user is added, so a changed group doesn't change its existing members. The script therefore finds each group's members (from the entitlements the group has granted, `GET .../management/groups/GROUP_ID/entitlements`) and removes and re-adds every member whose group Roles no longer match the group. `--dry-run` lists who it would refresh. If a member is removed but can't be added back, it prints `NOT RE-ADDED` and exits 1; add them back by hand. A member who holds none of the group's Roles through it can't be seen, so they aren't refreshed.
+Add users to a group with `POST /obp/v6.0.0/users/USER_ID/group-entitlements` (`{"group_id": "..."}`), which grants them the group's Roles. OBP copies the Roles at the moment a user is added, so a changed group doesn't change its existing members. The script therefore updates each group's members in place, without taking them out of the group. It finds the members from the entitlements the group has granted (`GET .../management/groups/GROUP_ID/entitlements`). A Role newly added to the group is granted only to members who don't already hold it in any way, by adding them to the group again; OBP then creates just the Roles they lack. A Role taken out of the group has the member's entitlement for it, granted by this group, deleted. Members whose Roles already match are left alone. Users get an email for each entitlement granted, so this sends only one per Role that is actually new to them. `--dry-run` lists each member it would update, and the Roles. A member who holds none of the group's Roles through it can't be seen, so isn't updated.
 
 **Adding users to the groups (`add_users_to_groups.sh`)**
 
@@ -216,7 +221,7 @@ Who is in which group is kept in `DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx`,
 
 Each user is looked up by username (`GET /obp/v6.0.0/users?username=`), and by provider too when column B is filled in. Fill it in if the same username exists at more than one provider; the script says so. Users already in a group are left alone. Nobody is removed: a user who is in a group but not ticked for it is only reported. Unknown users, and group columns with no matching OBP Group, are reported, and the script exits 1. Needs `CanGetAnyUser` and `CanAddUserToGroupAtOneBank` at the space's bank id.
 
-The groups don't depend on the entities existing. `recreate_ogcr_entities.sh` runs both scripts after recreating the entities, unless given `--only`. Needs `CanCreateGroupAtOneBank`, `CanUpdateGroupAtOneBank` and `CanGetGroupsAtOneBank` at the space's bank id (or the `...AtAllBanks` versions); refreshing members also needs `CanGetEntitlementsForAnyBank`, `CanRemoveUserFromGroupAtOneBank` and `CanAddUserToGroupAtOneBank`.
+The groups don't depend on the entities existing. `recreate_ogcr_entities.sh` runs both scripts after recreating the entities, unless given `--only`. Needs `CanCreateGroupAtOneBank`, `CanUpdateGroupAtOneBank` and `CanGetGroupsAtOneBank` at the space's bank id (or the `...AtAllBanks` versions); updating members also needs `CanGetEntitlementsForAnyBank`, `CanGetAnyUser`, `CanAddUserToGroupAtOneBank` and `CanDeleteEntitlementAtAnyBank` (all granted by `create_entitlements.sh`).
 
 **Create dummy data**
 

@@ -18,6 +18,12 @@
 #
 # --only recreates only the entities (steps 0-3), skipping the groups and users.
 #
+# Everything it prints is also saved to logs/recreate_ogcr_entities_<time>.log,
+# with a header (host, space, sheet, git commit, options) and every timing, also
+# the fast ones the console leaves out -- a complete record to hand to someone
+# (or an agent) looking into the dynamic entities. logs/ is git-ignored: the log
+# can hold real usernames from step 5.
+#
 # It first shows the host and space it will work on and asks for confirmation;
 # --yes skips the question (for automation). Without a terminal to ask on and
 # without --yes, it stops. Preview with ./dry_run_create_ogcr_entities.sh.
@@ -92,15 +98,69 @@ if [ "$ASSUME_YES" != true ]; then
 fi
 echo
 
+# Complete log of this run: from here on, everything printed goes to the console
+# AND the log file. Unbuffered Python keeps its lines in order with the shell's.
+LOG_DIR="logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="${LOG_DIR}/recreate_ogcr_entities_$(date +%Y%m%d-%H%M%S).log"
+export OGCR_LOG_FILE="$(pwd)/${LOG_FILE}"  # timing.py writes the fast timings here too
+export PYTHONUNBUFFERED=1
+{
+  echo "# recreate_ogcr_entities.sh log"
+  echo "# Started:  $(date -Is)"
+  echo "# Host:     ${TARGET_HOST}"
+  echo "# Entities: ${TARGET_SPACE}  (OBP_ENTITY_SPACE_ID=${TARGET_SPACE_ID})"
+  echo "# Sheet:    ${MATRIX}"
+  echo "# Options:  only=${ONLY_ENTITIES} yes=${ASSUME_YES}"
+  if GIT_COMMIT="$(git rev-parse --short HEAD 2>/dev/null)"; then
+    git diff --quiet HEAD 2>/dev/null || GIT_COMMIT+=" (with uncommitted changes)"
+  else
+    GIT_COMMIT="unknown"
+  fi
+  echo "# Git:      ${GIT_COMMIT}"
+  echo "# Timings:  lines starting with ⏱; the console only shows those over 1s, this log has them all"
+  echo
+} > "$LOG_FILE"
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "Logging to ${LOG_FILE}"
+
+# Timing: each step prints how long it took, and a summary of all the steps is
+# printed at the end, also when a step fails and stops the run. Inside steps 1-3
+# the Python scripts also time each entity and list their slowest.
+RUN_T0=$(date +%s%N)
+STEP_TIMINGS=()
+fmt_ms() { printf '%d.%01ds' $(( $1 / 1000 )) $(( $1 % 1000 / 100 )); }
+timed_step() {
+  local label="$1"; shift
+  local t0 rc=0 ms
+  t0=$(date +%s%N)
+  "$@" || rc=$?
+  ms=$(( ($(date +%s%N) - t0) / 1000000 ))
+  STEP_TIMINGS+=("$(printf '%10s  %s%s' "$(fmt_ms "$ms")" "$label" "$([ "$rc" -eq 0 ] || echo "  (failed)")")")
+  echo "⏱ ${label}: $(fmt_ms "$ms")"
+  return "$rc"
+}
+print_timings() {
+  [ ${#STEP_TIMINGS[@]} -gt 0 ] || return 0
+  echo
+  echo "=================================================="
+  echo " Timings"
+  echo "=================================================="
+  printf '%s\n' "${STEP_TIMINGS[@]}"
+  printf '%10s  %s\n' "$(fmt_ms $(( ($(date +%s%N) - RUN_T0) / 1000000 )))" "total"
+  echo "Full log: ${LOG_FILE}"
+}
+trap print_timings EXIT
+
 echo "=================================================="
 echo " STEP 0: Regenerating ${ENTITY_LIST} from ${MATRIX}"
 echo "=================================================="
 # Keep the delete list in sync with the spreadsheet, so we delete exactly what
 # we are about to recreate (and nothing else).
-"$PYTHON" parse_minimum_fields.py "$MATRIX" --save --output "$ENTITY_LIST"
+timed_step "Step 0: parse sheet" "$PYTHON" parse_minimum_fields.py "$MATRIX" --save --output "$ENTITY_LIST"
 
 # Bank level entities need their bank to exist; stop here if it can't be created.
-"$PYTHON" create_space_bank.py
+timed_step "Step 0: check/create bank" "$PYTHON" create_space_bank.py
 
 echo
 echo "=================================================="
@@ -109,20 +169,20 @@ echo "=================================================="
 # delete_ogcr_entities.py deletes ONLY the entities listed in ${ENTITY_LIST} and
 # exits non-zero if any survive; `set -e` then aborts so we never recreate on
 # top of leftovers.
-"$PYTHON" delete_ogcr_entities.py "$ENTITY_LIST" --yes
+timed_step "Step 1: delete entities" "$PYTHON" delete_ogcr_entities.py "$ENTITY_LIST" --yes
 echo "OGCR entities deleted."
 
 echo
 echo "=================================================="
 echo " STEP 2: Creating entities from ${MATRIX}"
 echo "=================================================="
-"$PYTHON" parse_minimum_fields.py "$MATRIX" --create --yes
+timed_step "Step 2: create entities" "$PYTHON" parse_minimum_fields.py "$MATRIX" --create --yes
 
 echo
 echo "=================================================="
 echo " STEP 3: Creating example data from ${MATRIX}"
 echo "=================================================="
-"$PYTHON" create_dummy_data.py "$MATRIX"
+timed_step "Step 3: example data" "$PYTHON" create_dummy_data.py "$MATRIX"
 
 if [ "$ONLY_ENTITIES" = true ]; then
   echo
@@ -136,7 +196,7 @@ echo "=================================================="
 echo " STEP 4: Creating/updating Role Groups from ${MATRIX}"
 echo "=================================================="
 # A failure here stops the run: users can't be added to groups that aren't right.
-"$PYTHON" create_role_groups.py "$MATRIX"
+timed_step "Step 4: Role Groups" "$PYTHON" create_role_groups.py "$MATRIX"
 
 echo
 echo "=================================================="
@@ -145,7 +205,7 @@ echo "=================================================="
 USERS_FAILED=false
 if [ -f "$USERS_SHEET" ]; then
   # Report failures (e.g. a user not on this OBP) but still finish the run.
-  "$PYTHON" add_users_to_groups.py "$USERS_SHEET" || USERS_FAILED=true
+  timed_step "Step 5: add users" "$PYTHON" add_users_to_groups.py "$USERS_SHEET" || USERS_FAILED=true
 else
   echo "No ${USERS_SHEET}; skipping. Nobody was added to the groups."
 fi

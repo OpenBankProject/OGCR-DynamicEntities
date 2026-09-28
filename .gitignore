@@ -138,3 +138,6 @@ entities_output.txt
 
 # libreoffice
 .~lock.*
+# Real user data (usernames, group memberships). Never commit.
+DO_NOT_COMMIT/
+*DO_NOT_COMMIT*

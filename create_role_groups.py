@@ -11,17 +11,21 @@ A group that already exists there (matched by name) has its Roles replaced by
 the sheet's, so it always matches the sheet. Groups there that are not in the
 sheet are left alone.
 
-NOTE: OBP copies a group's Roles to a user when the user is ADDED to the group.
-Changing the group afterwards does not change existing members' Roles; remove
-and re-add them to pick up the change.
+OBP copies a group's Roles to a user when the user is ADDED to the group, so
+changing the group does not change its existing members' Roles. Any member whose
+group-granted Roles differ from the group's is therefore removed from the group
+and added back. Members are found from the entitlements the group has granted.
 
 Needs CanCreateGroupAtOneBank, CanUpdateGroupAtOneBank and CanGetGroupsAtOneBank
-at that bank id (or the ...AtAllBanks versions).
+at that bank id (or the ...AtAllBanks versions); refreshing members also needs
+CanGetEntitlementsForAnyBank, CanRemoveUserFromGroupAtOneBank and
+CanAddUserToGroupAtOneBank.
 
 Usage:
     python3 create_role_groups.py [path/to/min_field_matrix.xlsx] [--dry-run]
 
 Exits 0 on success, 1 if the sheet has errors in the matrix or anything failed.
+A member removed but not added back is reported as NOT RE-ADDED; add them by hand.
 """
 
 import argparse
@@ -36,6 +40,7 @@ from role_groups import group_roles, parse_role_groups
 
 DEFAULT_SPREADSHEET = "min_field_matrix.xlsx"
 GROUPS_URL = f"{obp_host}/obp/v6.0.0/management/groups"
+USERS_URL = f"{obp_host}/obp/v6.0.0/users"
 
 
 def headers():
@@ -55,6 +60,55 @@ def get_groups_at_space():
 			continue
 		groups[g.get("group_name")] = g
 	return groups
+
+
+def get_group_members(group_id):
+	"""{user_id: {"username", "roles"}} of a group's members, from the entitlements it granted.
+	A member holding none of the group's Roles through it (e.g. the group had none) is not seen."""
+	response = requests.get(f"{GROUPS_URL}/{group_id}/entitlements", headers=headers(), timeout=30)
+	if not response.ok:
+		raise RuntimeError(f"{response.status_code} {response.text}")
+	members = {}
+	for e in response.json().get("entitlements", []):
+		member = members.setdefault(e["user_id"], {"username": e.get("username", ""), "roles": set()})
+		member["roles"].add(e["role_name"])
+	return members
+
+
+def refresh_members(group_id, roles, dry_run, tag):
+	"""Remove and re-add each member whose group-granted Roles differ from `roles`.
+	Returns the number of members that failed."""
+	try:
+		members = get_group_members(group_id)
+	except Exception as e:
+		print(f"  ✗ Could not list the members: {e}")
+		return 1
+	stale = {uid: m for uid, m in members.items() if m["roles"] != set(roles)}
+	if members:
+		print(f"  {len(members)} member(s), {len(stale)} to refresh")
+	failed = 0
+	for user_id, member in stale.items():
+		who = f"{member['username']} ({user_id})"
+		gained = sorted(set(roles) - member["roles"])
+		lost = sorted(member["roles"] - set(roles))
+		print(f"  {tag}REFRESH {who}: +{len(gained)} -{len(lost)} Role(s)")
+		if dry_run:
+			continue
+		response = requests.delete(f"{USERS_URL}/{user_id}/group-entitlements/{group_id}",
+			headers=headers(), timeout=30)
+		if not response.ok:
+			failed += 1
+			print(f"    ✗ remove failed, left as it was: {response.status_code} {response.text}")
+			continue
+		response = requests.post(f"{USERS_URL}/{user_id}/group-entitlements", json={"group_id": group_id},
+			headers=headers(), timeout=30)
+		if response.ok:
+			print(f"    ✓ re-added, {len(response.json().get('entitlements_created', []))} Role(s) granted")
+		else:
+			failed += 1
+			print(f"    ✗ NOT RE-ADDED: {who} was removed from the group but could not be added back; "
+				f"add them by hand. {response.status_code} {response.text}")
+	return failed
 
 
 def description_for(group, spreadsheet):
@@ -131,6 +185,7 @@ def main():
 			if not added and not removed and existing.get("is_enabled") \
 					and existing.get("group_description") == body["group_description"]:
 				print(f"{tag}Unchanged group {name!r} ({existing['group_id']}): {len(roles)} Role(s)")
+				failed += refresh_members(existing["group_id"], roles, args.dry_run, tag)
 				continue
 			print(f"{tag}UPDATE group {name!r} ({existing['group_id']}): {len(roles)} Role(s)")
 			for r in added:
@@ -139,10 +194,16 @@ def main():
 				print(f"    - {r}")
 			if not existing.get("is_enabled"):
 				print("    enable it")
-			if args.dry_run:
-				continue
-			response = requests.put(f"{GROUPS_URL}/{existing['group_id']}", json=body,
-				headers=headers(), timeout=30)
+			if not args.dry_run:
+				response = requests.put(f"{GROUPS_URL}/{existing['group_id']}", json=body,
+					headers=headers(), timeout=30)
+				if not response.ok:
+					failed += 1
+					print(f"  ✗ {response.status_code} {response.text}")
+					continue  # members stay as they are
+				print(f"  ✓ {response.json().get('group_id')}")
+			failed += refresh_members(existing["group_id"], roles, args.dry_run, tag)
+			continue
 
 		if response.ok:
 			print(f"  ✓ {response.json().get('group_id')}")
@@ -153,11 +214,8 @@ def main():
 	others = sorted(n for n in on_obp if n not in {g["name"] for g in groups})
 	if others:
 		print(f"Left untouched (not in the sheet): {', '.join(others)}")
-	if not args.dry_run:
-		print("Note: existing members keep the Roles they got when they joined; "
-			"remove and re-add them to pick up changes.")
 	if failed:
-		print(f"✗ {failed} group(s) failed")
+		print(f"✗ {failed} failure(s)")
 		return 1
 	return 0
 

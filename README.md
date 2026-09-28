@@ -21,6 +21,7 @@ pip install -r requirements.txt
 - **`check_login_and_roles.py`** / **`.sh`**: Check DirectLogin works and the user holds the Roles the entities need (read-only).
 - **`create_entitlements.py`** / **`.sh`**: Grant the logged in user those Roles.
 - **`create_role_groups.py`** / **`.sh`**: Create or update the OBP Groups defined by the spreadsheet's Role Group matrix (columns R onwards).
+- **`add_users_to_groups.py`** / **`.sh`**: Add users to those groups, as ticked in `DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx`.
 - **`role_groups.py`**: Reads that matrix (offline; used by the checker and `create_role_groups.py`).
 - **`dry_run_create_ogcr_entities.py`** / **`.sh`**: DRY RUN of `recreate_ogcr_entities.sh` — says what it would do, changes nothing.
 - **`create_space_bank.py`** / **`.sh`**: Create the `OBP_ENTITY_SPACE_ID` bank if it doesn't exist.
@@ -194,7 +195,21 @@ Any combination works (`R`, `CR`, `CRUD`, ...); empty means no access. Only the 
 ./create_role_groups.sh                # do it
 ```
 
-Then add users to a group with `POST /obp/v6.0.0/users/USER_ID/group-entitlements` (`{"group_id": "..."}`), which grants them the group's Roles. OBP copies the Roles at the moment a user is added, so after changing the sheet and re-running, remove and re-add existing members to pick up the change. The groups don't depend on the entities existing and aren't touched by `recreate_ogcr_entities.sh`. Needs `CanCreateGroupAtOneBank`, `CanUpdateGroupAtOneBank` and `CanGetGroupsAtOneBank` at the space's bank id (or the `...AtAllBanks` versions); adding members needs `CanAddUserToGroupAtOneBank`.
+Add users to a group with `POST /obp/v6.0.0/users/USER_ID/group-entitlements` (`{"group_id": "..."}`), which grants them the group's Roles. OBP copies the Roles at the moment a user is added, so a changed group doesn't change its existing members. The script therefore finds each group's members (from the entitlements the group has granted, `GET .../management/groups/GROUP_ID/entitlements`) and removes and re-adds every member whose group Roles no longer match the group. `--dry-run` lists who it would refresh. If a member is removed but can't be added back, it prints `NOT RE-ADDED` and exits 1; add them back by hand. A member who holds none of the group's Roles through it can't be seen, so they aren't refreshed.
+
+**Adding users to the groups (`add_users_to_groups.sh`)**
+
+Who is in which group is kept in `DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx`, sheet `Users-Groups-DO_NOT_COMMIT`. It holds real usernames, so `DO_NOT_COMMIT/` and any `*DO_NOT_COMMIT*` file are git-ignored. Row 1: `Username` (A), `Provider` (B), then one column per group from C (named exactly like the groups). Tick `TRUE` under each group a user should be in.
+
+```bash
+./add_users_to_groups.sh --dry-run            # say who would be added where
+./add_users_to_groups.sh                      # do it
+./add_users_to_groups.sh --user some.username # just one row
+```
+
+Each user is looked up by username (`GET /obp/v6.0.0/users?username=`), and by provider too when column B is filled in. Fill it in if the same username exists at more than one provider; the script says so. Users already in a group are left alone. Nobody is removed: a user who is in a group but not ticked for it is only reported. Unknown users, and group columns with no matching OBP Group, are reported, and the script exits 1. Needs `CanGetAnyUser` and `CanAddUserToGroupAtOneBank` at the space's bank id.
+
+The groups don't depend on the entities existing and aren't touched by `recreate_ogcr_entities.sh`. Needs `CanCreateGroupAtOneBank`, `CanUpdateGroupAtOneBank` and `CanGetGroupsAtOneBank` at the space's bank id (or the `...AtAllBanks` versions); refreshing members also needs `CanGetEntitlementsForAnyBank`, `CanRemoveUserFromGroupAtOneBank` and `CanAddUserToGroupAtOneBank`.
 
 **Create dummy data**
 

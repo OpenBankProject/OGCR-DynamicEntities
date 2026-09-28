@@ -9,9 +9,14 @@
 #      dynamic entities on the instance are left untouched.
 #   2. Create the entities defined in min_field_matrix.xlsx.
 #   3. Create example/dummy objects for those entities.
+#   4. Create/update the Role Groups from the sheet's matrix (create_role_groups.sh).
+#   5. Add users to those groups from DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx (add_users_to_groups.sh),
+#      if that file exists.
 #
 # Usage:
-#   ./recreate_ogcr_entities.sh [path/to/min_field_matrix.xlsx] [--yes]
+#   ./recreate_ogcr_entities.sh [path/to/min_field_matrix.xlsx] [--yes] [--only]
+#
+# --only recreates only the entities (steps 0-3), skipping the groups and users.
 #
 # It first shows the host and space it will work on and asks for confirmation;
 # --yes skips the question (for automation). Without a terminal to ask on and
@@ -38,10 +43,13 @@ fi
 PYTHON="${PYTHON:-python3}"
 
 MATRIX="min_field_matrix.xlsx"
+USERS_SHEET="DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx"
 ASSUME_YES=false
+ONLY_ENTITIES=false
 for arg in "$@"; do
   case "$arg" in
     --yes) ASSUME_YES=true ;;
+    --only) ONLY_ENTITIES=true ;;
     -*) echo "Unknown option: $arg" >&2; exit 2 ;;
     *) MATRIX="$arg" ;;
   esac
@@ -64,6 +72,11 @@ echo " About to DELETE and RECREATE the OGCR entities"
 echo "   Host:     ${TARGET_HOST}"
 echo "   Entities: ${TARGET_SPACE}  (OBP_ENTITY_SPACE_ID=${TARGET_SPACE_ID})"
 echo "   Sheet:    ${MATRIX}"
+if [ "$ONLY_ENTITIES" = true ]; then
+  echo "   Groups:   skipped (--only)"
+else
+  echo "   Groups:   create/update from ${MATRIX}, then add users from ${USERS_SHEET}"
+fi
 echo " Existing records of those entities there will be lost."
 echo "=================================================="
 if [ "$ASSUME_YES" != true ]; then
@@ -111,5 +124,35 @@ echo " STEP 3: Creating example data from ${MATRIX}"
 echo "=================================================="
 "$PYTHON" create_dummy_data.py "$MATRIX"
 
+if [ "$ONLY_ENTITIES" = true ]; then
+  echo
+  echo "Done. Dynamic entities recreated and populated from ${MATRIX}."
+  echo "Role Groups and users skipped (--only)."
+  exit 0
+fi
+
 echo
-echo "Done. Dynamic entities recreated and populated from ${MATRIX}."
+echo "=================================================="
+echo " STEP 4: Creating/updating Role Groups from ${MATRIX}"
+echo "=================================================="
+# A failure here stops the run: users can't be added to groups that aren't right.
+"$PYTHON" create_role_groups.py "$MATRIX"
+
+echo
+echo "=================================================="
+echo " STEP 5: Adding users to the Role Groups"
+echo "=================================================="
+USERS_FAILED=false
+if [ -f "$USERS_SHEET" ]; then
+  # Report failures (e.g. a user not on this OBP) but still finish the run.
+  "$PYTHON" add_users_to_groups.py "$USERS_SHEET" || USERS_FAILED=true
+else
+  echo "No ${USERS_SHEET}; skipping. Nobody was added to the groups."
+fi
+
+echo
+echo "Done. Dynamic entities recreated and populated from ${MATRIX}, Role Groups updated."
+if [ "$USERS_FAILED" = true ]; then
+  echo "✗ Some users could not be added to their groups; see STEP 5 above." >&2
+  exit 1
+fi

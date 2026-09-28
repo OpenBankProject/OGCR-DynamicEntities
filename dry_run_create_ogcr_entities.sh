@@ -3,11 +3,14 @@
 # dry_run_create_ogcr_entities.sh
 #
 # DRY RUN of recreate_ogcr_entities.sh: reports what it would do -- create the
-# space's bank, delete, create, dummy data, and the Roles still needed --
-# without doing any of it. Only reads the spreadsheet and makes GET requests.
+# space's bank, delete, create, dummy data, the Roles still needed, the Role
+# Groups and the users added to them -- without doing any of it. Only reads the
+# spreadsheets and makes GET requests.
 #
 # Usage:
-#   ./dry_run_create_ogcr_entities.sh [path/to/min_field_matrix.xlsx]
+#   ./dry_run_create_ogcr_entities.sh [path/to/min_field_matrix.xlsx] [--only]
+#
+# --only previews only the entities, as recreate_ogcr_entities.sh --only would run.
 #
 # Notes:
 #   - Credentials/host/OBP_ENTITY_SPACE_ID come from your .env, same as the real run.
@@ -23,4 +26,31 @@ if [ -z "${PYTHON:-}" ] && [ -x ".venv/bin/python" ]; then
 fi
 PYTHON="${PYTHON:-python3}"
 
-exec "$PYTHON" dry_run_create_ogcr_entities.py "$@"
+MATRIX="min_field_matrix.xlsx"
+USERS_SHEET="DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx"
+ONLY_ENTITIES=false
+for arg in "$@"; do
+  case "$arg" in
+    --only) ONLY_ENTITIES=true ;;
+    -*) echo "Unknown option: $arg" >&2; exit 2 ;;
+    *) MATRIX="$arg" ;;
+  esac
+done
+
+"$PYTHON" dry_run_create_ogcr_entities.py "$MATRIX"
+if [ "$ONLY_ENTITIES" = true ]; then
+  echo "[DRY RUN] Role Groups and users would be skipped (--only)"
+  exit 0
+fi
+
+echo "[DRY RUN]"
+echo "[DRY RUN] STEP 4: Role Groups from ${MATRIX}"
+# The group previews exit 1 when they find problems; keep going so the whole preview shows.
+"$PYTHON" create_role_groups.py "$MATRIX" --dry-run || true
+echo "[DRY RUN]"
+echo "[DRY RUN] STEP 5: Users from ${USERS_SHEET}"
+if [ -f "$USERS_SHEET" ]; then
+  "$PYTHON" add_users_to_groups.py "$USERS_SHEET" --dry-run || true
+else
+  echo "[DRY RUN] No ${USERS_SHEET}; nobody would be added to the groups"
+fi

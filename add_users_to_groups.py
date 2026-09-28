@@ -127,13 +127,19 @@ def main():
 		print(f"✗ Could not list the groups at bank id {ROLE_BANK_ID}: {e}")
 		return 1
 	missing = [g for g in group_names if g not in on_obp]
-	if missing:
+	if missing and not args.dry_run:
 		print(f"✗ No group at bank id {ROLE_BANK_ID} named: {', '.join(missing)} "
 			"(run ./create_role_groups.sh, or fix the header). Nothing was changed.")
 		return 1
+	if missing:
+		# A dry run of recreate_ogcr_entities.sh previews this before step 4 has made the groups.
+		print(f"! No group at bank id {ROLE_BANK_ID} named: {', '.join(missing)} yet; "
+			"previewing as if ./create_role_groups.sh had created them (empty)")
 
-	members = {}  # group name -> {user_id: ...}
+	members = {name: {} for name in missing}  # group name -> {user_id: ...}
 	for name in group_names:
+		if name in missing:
+			continue
 		group = on_obp[name]
 		if not group.get("list_of_roles"):
 			print(f"! Group {name!r} has no Roles, so its members can't be seen or given anything")

@@ -118,9 +118,16 @@ The output lists only the problems actually found (`ERRORS FOUND` / `WARNINGS FO
 
 **Re-create the entities (delete then create from the spreadsheet)**
 
-**Preview it first with a DRY RUN.** `./dry_run_create_ogcr_entities.sh [path/to/min_field_matrix.xlsx]` walks the same steps as `recreate_ogcr_entities.sh` in the same space, but only reads (the sheet, and GET requests to OBP). Every line starts with `[DRY RUN]`, and it reports: problems in the sheet; whether the space's bank would be created; each entity it would delete, with its record count; entities in the space it would leave alone; each entity it would create; the example data; and the Roles `create_entitlements.sh` would still need to grant. It doesn't rewrite `entities_output.txt`.
+**Preview it first with a DRY RUN.** `./dry_run_create_ogcr_entities.sh [path/to/min_field_matrix.xlsx]` walks the same steps as `recreate_ogcr_entities.sh` in the same space, but only reads (the sheet, and GET requests to OBP). Every line starts with `[DRY RUN]`, and it reports: problems in the sheet; whether the space's bank would be created; each entity it would delete, with its record count; entities in the space it would leave alone; each entity it would create; the example data; the Roles `create_entitlements.sh` would still need to grant; then the Role Groups it would create or update, and the users it would add to them. It doesn't rewrite `entities_output.txt`. Pass `--only` to preview just the entities.
 
 `recreate_ogcr_entities.sh` itself starts by showing the host, the space (`OBP_ENTITY_SPACE_ID`) and the sheet, and asks you to type `yes` before it changes anything. Pass `--yes` to skip the question in automation; without a terminal and without `--yes` it stops.
+
+After the entities and example data, it also runs `create_role_groups.py` (step 4) and then `add_users_to_groups.py` (step 5, only if `DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx` exists); see "Role Groups" below. A failure in step 4 stops the run. A user who can't be added in step 5 (e.g. not on this OBP) is reported, the rest still run, and the script exits 1 at the end. Pass `--only` to recreate only the entities and skip both steps:
+
+```bash
+./recreate_ogcr_entities.sh                 # entities, example data, Role Groups, users
+./recreate_ogcr_entities.sh --only          # entities and example data only
+```
 
 A clean wipe-and-recreate driven entirely by the spreadsheet (this is what `main.py` does *not* do — `main.py` is tied to the hardcoded list in `dynamic_entities.py`):
 
@@ -209,7 +216,7 @@ Who is in which group is kept in `DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx`,
 
 Each user is looked up by username (`GET /obp/v6.0.0/users?username=`), and by provider too when column B is filled in. Fill it in if the same username exists at more than one provider; the script says so. Users already in a group are left alone. Nobody is removed: a user who is in a group but not ticked for it is only reported. Unknown users, and group columns with no matching OBP Group, are reported, and the script exits 1. Needs `CanGetAnyUser` and `CanAddUserToGroupAtOneBank` at the space's bank id.
 
-The groups don't depend on the entities existing and aren't touched by `recreate_ogcr_entities.sh`. Needs `CanCreateGroupAtOneBank`, `CanUpdateGroupAtOneBank` and `CanGetGroupsAtOneBank` at the space's bank id (or the `...AtAllBanks` versions); refreshing members also needs `CanGetEntitlementsForAnyBank`, `CanRemoveUserFromGroupAtOneBank` and `CanAddUserToGroupAtOneBank`.
+The groups don't depend on the entities existing. `recreate_ogcr_entities.sh` runs both scripts after recreating the entities, unless given `--only`. Needs `CanCreateGroupAtOneBank`, `CanUpdateGroupAtOneBank` and `CanGetGroupsAtOneBank` at the space's bank id (or the `...AtAllBanks` versions); refreshing members also needs `CanGetEntitlementsForAnyBank`, `CanRemoveUserFromGroupAtOneBank` and `CanAddUserToGroupAtOneBank`.
 
 **Create dummy data**
 

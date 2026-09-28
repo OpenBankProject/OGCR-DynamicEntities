@@ -337,7 +337,7 @@ def main():
     parser = argparse.ArgumentParser(description="Create dummy objects for the OGCR dynamic entities from the spreadsheet.")
     parser.add_argument("file", nargs="?", default=DEFAULT_SPREADSHEET, help=f"Spreadsheet path (default: {DEFAULT_SPREADSHEET}).")
     parser.add_argument("--token", default=default_token, help="DirectLogin token (overrides obp_client.py).")
-    parser.add_argument("--no-log", action="store_true", help=f"Do not record creation/errors/fallbacks in the {LOG_ENTITY_NAME} dynamic entity.")
+    parser.add_argument("--log", action="store_true", help=f"Record creation/errors/fallbacks in the {LOG_ENTITY_NAME} dynamic entity (off by default).")
     parser.add_argument("--fixtures-only", action="store_true", help="Only write the controlled vocabularies from fixtures.py, leaving every other entity untouched. Rows already present are skipped, so this tops up a partially populated table.")
     args = parser.parse_args()
 
@@ -349,10 +349,10 @@ def main():
         logger.error(f"No entities parsed from {args.file}")
         return
 
-    # Ensure the audit-log dynamic entity exists; if unavailable, carry on
-    # without logging rather than failing the data creation.
+    # Only with --log: ensure the audit-log dynamic entity exists; if unavailable,
+    # carry on without logging rather than failing the data creation.
     log_enabled = False
-    if not args.no_log:
+    if args.log:
         log_enabled = ensure_log_entity(token=args.token) is not None
         if not log_enabled:
             logger.warning(f"Audit logging disabled: {LOG_ENTITY_NAME} is unavailable")
@@ -469,7 +469,7 @@ def main():
         )
 
     def _attempt(ename):
-        # Includes writing the audit log record(s), which is part of the cost.
+        # With --log, includes writing the audit log record(s), which is part of the cost.
         with timed(f"example data for {ename}"):
             _attempt_untimed(ename)
 

@@ -129,7 +129,7 @@ After the entities and example data, it also runs `create_role_groups.py` (step 
 ./recreate_ogcr_entities.sh --only          # entities and example data only
 ```
 
-To see what takes a while: each step prints `⏱ <step>: <seconds>`, and a table of all the step times and the total is printed at the end, also when a step fails. Inside steps 1–3, each entity's delete, create, reference restore and example data gets its own `⏱` line if it takes over 1s, and each of those scripts ends with its 5 slowest operations. The example data timings include writing the audit log records.
+To see what takes a while: each step prints `⏱ <step>: <seconds>`, and a table of all the step times and the total is printed at the end, also when a step fails. Inside steps 1–3, each entity's delete, create, reference restore and example data gets its own `⏱` line if it takes over 1s, and each of those scripts ends with its 5 slowest operations. The example data timings would include writing the audit log records, but `recreate_ogcr_entities.sh` doesn't turn the audit log on (see `--log` below).
 
 Each run also writes a complete log to `logs/recreate_ogcr_entities_<date>-<time>.log`: everything printed on the console (errors included), plus every timing, including the ones under 1s that the console leaves out. It starts with a header giving the host, space, sheet, git commit and options, so it can be handed as-is to someone, or an agent, looking into the dynamic entities. The path is printed at the start and end of the run. `logs/` is git-ignored, because step 5 can write real usernames into it.
 
@@ -233,7 +233,7 @@ python3 create_dummy_data.py [path/to/min_field_matrix.xlsx] [--token TOKEN]
 
 - **`file`** (positional): spreadsheet path. Defaults to `min_field_matrix.xlsx`.
 - **`--token`**: DirectLogin token (overrides the token from `obp_client.py`).
-- **`--no-log`**: Do not write the audit trail to the `ogcr_dynamicentities_log` dynamic entity.
+- **`--log`**: Write the audit trail to the `ogcr_dynamicentities_log` dynamic entity. Off by default; `recreate_ogcr_entities.sh` doesn't pass it.
 
 How it works:
 - **Values come from the spreadsheet** — each field is populated from its column G `example` value, coerced to the field's declared type (string, `integer`, `number`, `boolean`, `json`, `DATE_WITH_DAY`).
@@ -241,7 +241,7 @@ How it works:
 - Entities that own an `<entity>_id` field get a canonical id taken from the spreadsheet example; the verification/report entities without one receive an OBP-generated UUID.
 - The field `compliance_certificate_id` (which does not follow the `<entity>_id` convention) is mapped to `certificate_of_compliance` via an explicit alias in the script (`FK_ALIASES`).
 
-- **The run is audited in OBP** — unless `--no-log` is given, the script ensures a dynamic entity named after this application, `ogcr_dynamicentities_log` (in the same space as the other entities), exists (defined in `ogcr_log_entity.py`) and writes one record to it per object: `entity_created` for each created object and `entity_failed` for each failed create (with the OBP error text). Each record carries `entity_name`, `entity_id`, `status`, `message`, a UTC `timestamp`, and a json `references` list describing **every** `reference:<x>` field on the entity and how it resolved — each item has `field`, `target`, `resolution` (`resolved` = a real created id was used; `fallback` = the spreadsheet example value was used because the target is a static OBP entity or one we don't create here) and the `value` posted. Logging is best-effort: if the log entity cannot be created or a record fails to POST, the data creation continues uninterrupted.
+- **The run can be audited in OBP** — off by default. Only when `--log` is given does the script ensure a dynamic entity named after this application, `ogcr_dynamicentities_log` (in the same space as the other entities), exists (defined in `ogcr_log_entity.py`) and write one record to it per object: `entity_created` for each created object and `entity_failed` for each failed create (with the OBP error text). Each record carries `entity_name`, `entity_id`, `status`, `message`, a UTC `timestamp`, and a json `references` list describing **every** `reference:<x>` field on the entity and how it resolved — each item has `field`, `target`, `resolution` (`resolved` = a real created id was used; `fallback` = the spreadsheet example value was used because the target is a static OBP entity or one we don't create here) and the `value` posted. Logging is best-effort: if the log entity cannot be created or a record fails to POST, the data creation continues uninterrupted.
 
 Notes:
 - It creates **one record per entity**. To create more (e.g. several parcels under one activity), extend the payload loop in `main()`.

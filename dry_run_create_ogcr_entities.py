@@ -9,7 +9,8 @@ the same steps as recreate_ogcr_entities.sh, in the same space
      ... create the space's bank, if it is missing
   1. delete the OGCR entities in the sheet that exist now (records + definition)
   2. create every entity in the sheet
-  3. create the dummy data, the controlled vocabularies and the audit log entity
+  3. create the dummy data and the controlled vocabularies (without the audit log,
+     which create_dummy_data.py only writes with --log)
   and afterwards, what create_entitlements.sh would still need to grant.
 
 Usage:
@@ -138,8 +139,6 @@ def main():
 
 	# --- STEP 3: dummy data ---------------------------------------------------------------
 	heading("STEP 3: Create the example data")
-	if LOG_ENTITY_NAME not in existing:
-		say(f"WOULD CREATE the audit log entity {LOG_ENTITY_NAME}")
 	objects = 0
 	for name in entities:
 		rows = len(fixture_records(name))
@@ -149,7 +148,7 @@ def main():
 		else:
 			objects += 1
 	say(f"WOULD CREATE one example object for each of the other {len(entities) - sum(1 for n in entities if fixture_records(n))} entities")
-	say(f"= about {objects} objects, each also logged to {LOG_ENTITY_NAME}")
+	say(f"= about {objects} objects (not logged to {LOG_ENTITY_NAME}: create_dummy_data.py only logs with --log)")
 
 	# --- Roles, for create_entitlements.sh ------------------------------------------------
 	heading(f"Roles at bank id {ROLE_BANK_ID} (granted separately by ./create_entitlements.sh)")

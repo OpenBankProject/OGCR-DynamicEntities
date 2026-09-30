@@ -14,14 +14,26 @@ bank id of the entities' space (OBP_ENTITY_SPACE_ID, or SYS for system level).
 Each user is looked up by username, and by provider too when column B is filled
 (needed when the same username exists at more than one provider). Adding a user
 grants them the group's Roles. Users already in a group are left as they are.
-Nobody is removed: a user who is in a group but not ticked for it is only reported.
 
-Needs CanGetAnyUser, and CanAddUserToGroupAtOneBank at that bank id (or
-CanAddUserToGroupAtAllBanks); CanGetEntitlementsForAnyBank to see who is
-already in a group.
+Nobody is removed: a user who is in a group but not ticked for it is only
+reported. With --remove-unticked (as sync_user_group_permissions.py runs it) they
+are removed from it (DELETE /obp/v6.0.0/users/USER_ID/group-entitlements/GROUP_ID):
+the entitlements that group granted them are deleted, except a Role another of
+their groups still grants, which is kept. Additions are made first, so a Role a
+newly ticked group also grants is kept rather than deleted and granted again
+(another email). Users not in the sheet, and groups not in its header, are not
+touched.
+
+For each user it also lists the Roles they hold that none of their groups
+granted (by hand, by an entitlement request, or by a group since deleted), at
+any bank id: removing them from groups leaves those.
+
+Needs CanGetAnyUser, CanGetUserGroupMembershipsAtOneBank (to see which groups a
+user is in) and CanAddUserToGroupAtOneBank at that bank id (or the ...AtAllBanks
+versions); --remove-unticked also needs CanRemoveUserFromGroupAtOneBank.
 
 Usage:
-    python3 add_users_to_groups.py [path/to/users.xlsx] [--sheet NAME] [--user USERNAME] [--dry-run]
+    python3 add_users_to_groups.py [path/to/users.xlsx] [--sheet NAME] [--user USERNAME] [--remove-unticked] [--dry-run]
 
 Exits 0 on success, 1 if the sheet could not be used or anything failed.
 """
@@ -33,7 +45,7 @@ import pandas as pd
 
 from check_min_field_matrix import has_green_checkmark
 from obp_client import session
-from create_role_groups import USERS_URL, get_group_members, get_groups_at_space, headers
+from create_role_groups import USERS_URL, direct_roles, get_groups_at_space, get_user_memberships, headers, print_direct_roles
 from obp_space import ROLE_BANK_ID
 
 DEFAULT_FILE = "DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx"
@@ -96,13 +108,17 @@ def find_user(username, provider):
 	return found[0], None
 
 
-def main():
+def main(argv=None):
 	parser = argparse.ArgumentParser(description="Add users to the OGCR Role Groups, as ticked in a users spreadsheet.")
 	parser.add_argument("file", nargs="?", default=DEFAULT_FILE, help=f"Path to the xlsx file (default: {DEFAULT_FILE})")
 	parser.add_argument("--sheet", default=DEFAULT_SHEET, help=f"Sheet to read (default: {DEFAULT_SHEET})")
 	parser.add_argument("--user", help="Only this username (column A)")
-	parser.add_argument("--dry-run", action="store_true", help="Only say who would be added to which group")
-	args = parser.parse_args()
+	parser.add_argument("--remove-unticked", action="store_true",
+		help="Remove users from the groups they are in but not ticked for (otherwise only reported)")
+	parser.add_argument("--dry-run", action="store_true", help="Only say who would be added to or removed from which group")
+	# sync_user_group_permissions.py lists them itself, after its step 2.
+	parser.add_argument("--skip-direct-roles", action="store_true", help=argparse.SUPPRESS)
+	args = parser.parse_args(argv)
 	tag = "[DRY RUN] " if args.dry_run else ""
 
 	try:
@@ -136,18 +152,9 @@ def main():
 		print(f"! No group at bank id {ROLE_BANK_ID} named: {', '.join(missing)} yet; "
 			"previewing as if ./create_role_groups.sh had created them (empty)")
 
-	members = {name: {} for name in missing}  # group name -> {user_id: ...}
 	for name in group_names:
-		if name in missing:
-			continue
-		group = on_obp[name]
-		if not group.get("list_of_roles"):
-			print(f"! Group {name!r} has no Roles, so its members can't be seen or given anything")
-		try:
-			members[name] = get_group_members(group["group_id"])
-		except Exception as e:
-			print(f"✗ Could not list the members of {name!r}: {e}")
-			return 1
+		if name not in missing and not on_obp[name].get("list_of_roles"):
+			print(f"! Group {name!r} has no Roles, so its members are given nothing")
 
 	print(f"{tag}{len(users)} user(s) from {args.sheet!r}, groups at bank id {ROLE_BANK_ID}: {', '.join(group_names)}")
 	failed = 0
@@ -159,15 +166,22 @@ def main():
 			print(f"✗ A{u['row']} {label}: {problem}")
 			continue
 		user_id = user["user_id"]
-		in_groups = [name for name in group_names if user_id in members[name]]
+		try:
+			memberships = get_user_memberships(user_id)
+		except Exception as e:
+			failed += 1
+			print(f"✗ A{u['row']} {label}: could not list their groups: {e}")
+			continue
+		group_ids = {m["group_id"] for m in memberships}
+		in_groups = [name for name in group_names if name not in missing and on_obp[name]["group_id"] in group_ids]
 		extra = [name for name in in_groups if name not in u["groups"]]
 		to_add = [name for name in u["groups"] if name not in in_groups]
 		print(f"{label} ({user_id}): ticked {', '.join(u['groups']) or 'none'}")
+		if not args.skip_direct_roles:
+			print_direct_roles(direct_roles(user.get("entitlements", {}).get("list", []), memberships), indent="    ")
 		for name in u["groups"]:
 			if name not in to_add:
 				print(f"    = already in {name!r}")
-		for name in extra:
-			print(f"    ! in {name!r} but not ticked for it (not removed)")
 		for name in to_add:
 			print(f"    {tag}+ ADD to {name!r}")
 			if args.dry_run:
@@ -176,6 +190,21 @@ def main():
 				json={"group_id": on_obp[name]["group_id"]}, headers=headers(), timeout=30)
 			if response.ok:
 				print(f"      ✓ {len(response.json().get('entitlements_created', []))} Role(s) granted")
+			else:
+				failed += 1
+				print(f"      ✗ {response.status_code} {response.text}")
+		# After the additions, so a Role a newly ticked group also grants is kept.
+		for name in extra:
+			if not args.remove_unticked:
+				print(f"    ! in {name!r} but not ticked for it (not removed; --remove-unticked removes)")
+				continue
+			print(f"    {tag}- REMOVE from {name!r} (not ticked)")
+			if args.dry_run:
+				continue
+			response = session.delete(f"{USERS_URL}/{user_id}/group-entitlements/{on_obp[name]['group_id']}",
+				headers=headers(), timeout=30)
+			if response.ok:
+				print("      ✓ removed")
 			else:
 				failed += 1
 				print(f"      ✗ {response.status_code} {response.text}")

@@ -7,7 +7,7 @@
 # at or grant to, not the one logged in from .env.
 #
 # Usage:
-#   ./grant_user_dynamic_entity_roles.sh USERNAME --entity NAME [--entity NAME ...] [--access CRUD] [--bank-id SYS] [--dry-run]
+#   ./grant_user_dynamic_entity_roles.sh USERNAME --entity NAME [--entity NAME ...] [--access CRUD] [--bank-id BANK_ID] [--dry-run]
 
 set -euo pipefail
 

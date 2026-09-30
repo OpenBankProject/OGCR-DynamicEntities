@@ -6,7 +6,7 @@
  * code URL-encoded inside a JSON column, which is unreviewable in that form, so the
  * repo keeps the real Scala here and encodes at push time.
  *
- * Served at:  GET /obp/dynamic-endpoint/registry/activities
+ * Served at:  GET /obp/dynamic-endpoint/dynamic-resource-doc/registry/activities
  * Auth:       none (the doc is created with no `roles`, so authentication is optional)
  *
  * Why an endpoint rather than five client-side calls: the registry list needs
@@ -16,8 +16,9 @@
  * data and only the registry columns are projected — which matters because this
  * endpoint is public.
  *
- * System-level entities only (bankId = None). Bank/space-level versioning is
- * deliberately not used yet — see SPACE_LEVEL_VERSIONING_PLAN.md.
+ * Reads the entities of the `ogcr` space (bank id). SPACE_BANK_ID below must match
+ * OBP_ENTITY_SPACE_ID (obp_space.py); dynamic_resource_docs.py refuses to push it
+ * otherwise.
  *
  * What is in scope without importing: CallContext, HttpCode, IO, Request/Response,
  * Future, the global ExecutionContext and `implicit val formats`, all supplied by
@@ -32,6 +33,9 @@
 
     val provider = DynamicDataProvider.connectorMethodProvider.vend
 
+    // The space (bank id) the entities live in. None would be the system level.
+    val SPACE_BANK_ID: Option[String] = Some("ogcr")
+
     // Entity names as created by parse_minimum_fields.py. If OBP_ENTITY_PREFIX is
     // ever set for a deployment, these need the same prefix.
     val ACTIVITY = "activity"
@@ -40,10 +44,10 @@
     val CERTIFICATE = "certificate_of_compliance"
     val VERIFICATION = "activity_verification"
 
-    // bankId = None is the system level; userId = None / isPersonalEntity = false
-    // reads the shared rows rather than one user's personal ones.
+    // userId = None / isPersonalEntity = false reads the shared rows rather than one
+    // user's personal ones.
     def rowsOf(entityName: String): List[JObject] =
-      provider.getAllDataJson(None, entityName, None, false)
+      provider.getAllDataJson(SPACE_BANK_ID, entityName, None, false)
 
     def str(row: JObject, field: String): Option[String] =
       row \ field match {

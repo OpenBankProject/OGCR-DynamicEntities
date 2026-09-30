@@ -13,6 +13,9 @@ record endpoints the group may call:
 Any combination may be written (R, CR, CRUD, ...); empty means no access. Cells
 on field rows are ignored: access is per entity, not per field.
 
+Every group also holds MEMBER_ROLES, so any user set up through the groups can
+list (GET) the dynamic entity definitions at the space's bank id.
+
 No side effects on import (no login), so offline scripts can use it too.
 """
 
@@ -42,6 +45,7 @@ GROUP_ADMIN_ROLES = [
 	("CanUpdateGroupAtOneBank", ROLE_BANK_ID),
 	("CanGetGroupsAtOneBank", ROLE_BANK_ID),
 	("CanAddUserToGroupAtOneBank", ROLE_BANK_ID),
+	("CanRemoveUserFromGroupAtOneBank", ROLE_BANK_ID),
 	("CanGetEntitlementsForAnyBank", ""),
 	("CanGetAnyUser", ""),
 	("CanDeleteEntitlementAtAnyBank", ""),
@@ -130,6 +134,10 @@ def parse_role_groups(file_path):
 	return groups, errors, warnings
 
 
+# Held by every group, whatever its column ticks: listing the entity definitions.
+MEMBER_ROLES = ["CanGetDynamicEntityDefinitions"]
+
+
 def group_roles(group):
-	"""All the Role names of one parsed group, entity by entity."""
-	return [role for entity, access in group["access"].items() for role in roles_for(entity, access)]
+	"""All the Role names of one parsed group, entity by entity, then MEMBER_ROLES."""
+	return [role for entity, access in group["access"].items() for role in roles_for(entity, access)] + MEMBER_ROLES

@@ -2,12 +2,12 @@
 #
 # show_user_dynamic_entity_roles.sh
 #
-# List a user's dynamic entity entitlements (system level, or --bank-id).
+# List a user's dynamic entity entitlements (at the space's bank id, or --bank-id).
 # Runs show_user_dynamic_entity_roles.py; all arguments are passed through. USERNAME is the user to look
 # at or grant to, not the one logged in from .env.
 #
 # Usage:
-#   ./show_user_dynamic_entity_roles.sh USERNAME [--bank-id BANK_ID] [--provider PROVIDER]
+#   ./show_user_dynamic_entity_roles.sh USERNAME [--bank-id BANK_ID] [--provider PROVIDER] [--by-entity]
 
 set -euo pipefail
 

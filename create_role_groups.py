@@ -5,43 +5,57 @@ role_groups.py) says which record endpoints each group may call on each entity.
 Each column becomes an OBP Group, named after its header, at the bank id of the
 entities' space (OBP_ENTITY_SPACE_ID, or SYS for system level; see obp_space.py),
 holding the matching CanCreate/Get/Update/DeleteDynamicEntityRecord_<entity>
-Roles. Adding a user to the group then grants them those Roles at that bank id.
+Roles, plus CanGetDynamicEntityDefinitions (role_groups.MEMBER_ROLES) so every
+member can list the entity definitions. Adding a user to the group then grants
+them those Roles at that bank id.
 
 A group that already exists there (matched by name) has its Roles replaced by
 the sheet's, so it always matches the sheet. Groups there that are not in the
 sheet are left alone.
 
 OBP copies a group's Roles to a user when the user is ADDED to the group, so
-changing the group does not change its existing members' Roles. The members are
-therefore brought up to date in place, without leaving the group:
-  - a Role added to the group, that a member does not hold at all, is granted by
-    adding them to the group again (OBP only creates the Roles they lack);
+changing the group does not change its existing members' Roles. After each
+existing group is updated, OBP brings its members up to date in place, without
+anyone leaving the group (POST /obp/v7.0.0/management/groups/GROUP_ID/sync-members):
+  - a Role of the group a member does not hold at all is granted to them;
   - a Role taken out of the group has the member's entitlement for it, granted
-    by this group, deleted.
-Members are found from the entitlements the group has granted.
+    by this group, deleted -- unless another group the member is in still grants
+    that Role, in which case it is kept and recorded against that group.
+With --dry-run the members are previewed against the group's Roles as they are
+on OBP now, since the group itself is not updated.
+
+With --user USERNAME the groups are still created and updated from the sheet,
+but only that user is brought up to date, in every group they are in (at any
+bank id), and the other members are left as they are until a run without --user
+(POST /obp/v7.0.0/management/users/USER_ID/sync-groups). That also clears the
+user's entitlements left by groups since deleted: each is moved to another of
+their groups that grants the Role, or deleted.
 
 Needs CanCreateGroupAtOneBank, CanUpdateGroupAtOneBank and CanGetGroupsAtOneBank
 at that bank id (or the ...AtAllBanks versions); updating members also needs
-CanGetEntitlementsForAnyBank, CanGetAnyUser, CanAddUserToGroupAtOneBank and
-CanDeleteEntitlementAtAnyBank.
+CanAddUserToGroupAtOneBank and CanRemoveUserFromGroupAtOneBank (or ...AtAllBanks);
+--user also needs CanGetAnyUser.
 
 Usage:
-    python3 create_role_groups.py [path/to/min_field_matrix.xlsx] [--dry-run]
+    python3 create_role_groups.py [path/to/min_field_matrix.xlsx] [--user USERNAME [--provider PROVIDER]] [--dry-run]
 
 Exits 0 on success, 1 if the sheet has errors in the matrix or anything failed.
 """
 
 import argparse
 import sys
+from collections import defaultdict
 
 from get_and_delete_dynamic_entities import get_all_system_dynamic_entities
 from obp_client import token, obp_host, session
 from obp_space import ROLE_BANK_ID, describe
-from role_groups import group_roles, parse_role_groups
+from role_groups import MEMBER_ROLES, group_roles, parse_role_groups
 
 DEFAULT_SPREADSHEET = "min_field_matrix.xlsx"
 GROUPS_URL = f"{obp_host}/obp/v6.0.0/management/groups"
 USERS_URL = f"{obp_host}/obp/v6.0.0/users"
+SYNC_GROUPS_URL = f"{obp_host}/obp/v7.0.0/management/groups"
+SYNC_USERS_URL = f"{obp_host}/obp/v7.0.0/management/users"
 
 
 def headers():
@@ -79,70 +93,108 @@ def get_group_members(group_id):
 	return members
 
 
-def get_roles_held(user_id):
-	"""The Roles a user holds at ROLE_BANK_ID, however they were granted."""
-	response = session.get(USERS_URL, params={"user_id": user_id}, headers=headers(), timeout=30)
+def sync_members(group_id, dry_run, tag):
+	"""Bring the group's members in line with its Roles on OBP (POST .../sync-members), without
+	taking anyone out of the group. Returns the number of failures."""
+	response = session.post(f"{SYNC_GROUPS_URL}/{group_id}/sync-members",
+		params={"dry_run": "true"} if dry_run else None, headers=headers(), timeout=120)
+	if not response.ok:
+		print(f"  ✗ Could not sync the members: {response.status_code} {response.text}")
+		return 1
+	members = response.json().get("members", [])
+	updated = 0
+	for m in members:
+		created, deleted, moved = m["entitlements_created"], m["entitlements_deleted"], m["entitlements_moved"]
+		if not (created or deleted or moved):
+			continue
+		updated += 1
+		print(f"  {tag}UPDATE member {m['username']} ({m['user_id']}): +{len(created)} -{len(deleted)} Role(s)")
+		for r in created:
+			print(f"      + {r}")
+		for r in deleted:
+			print(f"      - {r}")
+		for mv in moved:
+			print(f"      = {mv['role_name']} (kept: now granted by group {mv['to_group_id']})")
+	if members:
+		print(f"  {len(members)} member(s), {updated} {'to update' if dry_run else 'updated'}")
+	return 0
+
+
+def get_user_memberships(user_id):
+	"""The groups the user is in, each with `list_of_entitlements`: the Roles it granted them.
+	Needs CanGetUserGroupMembershipsAtOneBank at each group's bank id (or ...AtAllBanks)."""
+	response = session.get(f"{USERS_URL}/{user_id}/group-entitlements", headers=headers(), timeout=30)
+	if not response.ok:
+		raise RuntimeError(f"{response.status_code} {response.text}")
+	return response.json().get("group_entitlements", [])
+
+
+def roles_by_group(memberships):
+	"""{(bank_id, role_name): group_name} of the Roles the user holds through their groups."""
+	return {(m.get("bank_id") or "", role): m.get("group_name")
+		for m in memberships for role in m.get("list_of_entitlements") or []}
+
+
+def direct_roles(entitlements, memberships):
+	"""[(bank_id, role_name)] of the user's entitlements that none of their groups granted: granted
+	by hand, by an entitlement request, or by a group since deleted. Removing the user from their
+	groups leaves these. `entitlements` as in GET /users (bank_id, role_name)."""
+	by_group = roles_by_group(memberships)
+	return sorted({(e.get("bank_id") or "", e["role_name"]) for e in entitlements} - by_group.keys())
+
+
+def print_direct_roles(direct, indent=""):
+	"""Say which Roles were not granted through a group, by bank id."""
+	if not direct:
+		print(f"{indent}All Roles granted through groups")
+		return
+	print(f"{indent}! {len(direct)} Role(s) not granted through a group (removing the user from groups leaves them):")
+	by_bank = defaultdict(list)
+	for bank_id, role in direct:
+		by_bank[bank_id].append(role)
+	for bank_id, roles in sorted(by_bank.items()):
+		print(f"{indent}    {bank_id or '(empty)'}: {', '.join(roles)}")
+
+
+def find_user_id(username, provider):
+	"""The user_id of the one user with this username (and provider, if given); raises if not exactly one."""
+	params = {"username": username}
+	if provider:
+		params["provider"] = provider
+	response = session.get(USERS_URL, params=params, headers=headers(), timeout=30)
 	if not response.ok:
 		raise RuntimeError(f"{response.status_code} {response.text}")
 	users = response.json().get("users", [])
-	entitlements = users[0].get("entitlements", {}).get("list", []) if users else []
-	return {e.get("role_name") for e in entitlements if e.get("bank_id", "") == ROLE_BANK_ID}
+	if len(users) != 1:
+		raise RuntimeError(f"{len(users)} users named {username}" + ("" if provider else "; pass --provider"))
+	return users[0]["user_id"]
 
 
-def sync_members(group_id, roles, dry_run, tag):
-	"""Bring each member's Roles in line with the group's `roles`, without taking
-	them out of the group. Returns the number of failures."""
-	try:
-		members = get_group_members(group_id)
-	except Exception as e:
-		print(f"  ✗ Could not list the members: {e}")
+def sync_user(user_id, group_names, dry_run, tag):
+	"""Bring one user in line with every group they are in (POST .../users/USER_ID/sync-groups), and clear
+	what is left of groups since deleted. Returns the number of failures."""
+	response = session.post(f"{SYNC_USERS_URL}/{user_id}/sync-groups",
+		params={"dry_run": "true"} if dry_run else None, headers=headers(), timeout=120)
+	if not response.ok:
+		print(f"✗ Could not sync {user_id}: {response.status_code} {response.text}")
 		return 1
-	failed = 0
-	updated = 0
-	for user_id, member in members.items():
-		who = f"{member['username']} ({user_id})"
-		lost = sorted(member["roles"] - set(roles))
-		# Roles the group grants that the member lacks. A Role shared with another group the
-		# member is in stays recorded against that group, so only count ones not held at all.
-		gained = sorted(set(roles) - member["roles"])
-		if gained:
-			try:
-				held = get_roles_held(user_id)
-			except Exception as e:
-				failed += 1
-				print(f"  ✗ {who}: could not read their Roles: {e}")
-				continue
-			gained = [r for r in gained if r not in held]
-		if not gained and not lost:
+	body = response.json()
+	print(f"{tag}SYNC user {body['username']} ({body['user_id']}) in {len(body['groups'])} group(s)")
+	for g in body["groups"]:
+		created, deleted, moved = g["entitlements_created"], g["entitlements_deleted"], g["entitlements_moved"]
+		label = f"deleted group {g['group_id']}" if g["group_deleted"] else \
+			f"{group_names.get(g['group_id'], g['group_id'])!r} (bank id {g['bank_id'] or 'none'})"
+		if not (created or deleted or moved):
+			print(f"    = {label}")
 			continue
-		updated += 1
-		print(f"  {tag}UPDATE member {who}: +{len(gained)} -{len(lost)} Role(s)")
-		for r in gained:
+		print(f"    {label}: +{len(created)} -{len(deleted)} Role(s)")
+		for r in created:
 			print(f"      + {r}")
-		for r in lost:
+		for r in deleted:
 			print(f"      - {r}")
-		if dry_run:
-			continue
-		if gained:
-			# Adding an existing member again grants only the Roles they do not hold.
-			response = session.post(f"{USERS_URL}/{user_id}/group-entitlements", json={"group_id": group_id},
-				headers=headers(), timeout=30)
-			if response.ok:
-				print(f"    ✓ {len(response.json().get('entitlements_created', []))} Role(s) granted")
-			else:
-				failed += 1
-				print(f"    ✗ grant failed: {response.status_code} {response.text}")
-		for r in lost:
-			response = session.delete(f"{obp_host}/obp/v6.0.0/entitlements/{member['entitlement_ids'][r]}",
-				headers=headers(), timeout=30)
-			if response.ok:
-				print(f"    ✓ removed {r}")
-			else:
-				failed += 1
-				print(f"    ✗ could not remove {r}: {response.status_code} {response.text}")
-	if members:
-		print(f"  {len(members)} member(s), {updated} to update")
-	return failed
+		for mv in moved:
+			print(f"      = {mv['role_name']} (kept: now granted by group {group_names.get(mv['to_group_id'], mv['to_group_id'])})")
+	return 0
 
 
 # Earlier versions of this script wrote a generated description starting with this; it is cleared.
@@ -153,8 +205,13 @@ def main():
 	parser = argparse.ArgumentParser(description="Create or update the OBP Groups defined in the spreadsheet's Role Group matrix.")
 	parser.add_argument("file", nargs="?", default=DEFAULT_SPREADSHEET,
 		help=f"Path to the xlsx file (default: {DEFAULT_SPREADSHEET})")
+	parser.add_argument("--user", metavar="USERNAME",
+		help="Bring only this user up to date, in every group they are in (other members are left as they are)")
+	parser.add_argument("--provider", help="With --user: needed if the username exists at more than one provider")
 	parser.add_argument("--dry-run", action="store_true", help="Only say what would be created or updated")
 	args = parser.parse_args()
+	if args.provider and not args.user:
+		parser.error("--provider needs --user")
 	tag = "[DRY RUN] " if args.dry_run else ""
 
 	groups, errors, warnings = parse_role_groups(args.file)
@@ -189,6 +246,15 @@ def main():
 		print(f"✗ Could not list the groups at bank id {ROLE_BANK_ID}: {e}")
 		return 1
 
+	user_id = None
+	if args.user:
+		try:
+			user_id = find_user_id(args.user, args.provider)
+		except Exception as e:
+			print(f"✗ Could not find the user {args.user}: {e}")
+			return 1
+		print(f"Only {args.user} ({user_id}) is brought up to date; other members are left as they are")
+
 	failed = 0
 	for group in groups:
 		name = group["name"]
@@ -205,7 +271,7 @@ def main():
 		if clear_description:
 			body["group_description"] = ""
 		if existing is None:
-			if not roles:
+			if roles == MEMBER_ROLES:
 				print(f"{tag}Skipping {name!r} (column {group['column']}): no access ticked")
 				continue
 			print(f"{tag}CREATE group {name!r} with {len(roles)} Role(s)")
@@ -221,7 +287,8 @@ def main():
 			removed = sorted(before - set(roles))
 			if not added and not removed and existing.get("is_enabled") and not clear_description:
 				print(f"{tag}Unchanged group {name!r} ({existing['group_id']}): {len(roles)} Role(s)")
-				failed += sync_members(existing["group_id"], roles, args.dry_run, tag)
+				if not user_id:
+					failed += sync_members(existing["group_id"], args.dry_run, tag)
 				continue
 			print(f"{tag}UPDATE group {name!r} ({existing['group_id']}): {len(roles)} Role(s)")
 			for r in added:
@@ -240,7 +307,8 @@ def main():
 					print(f"  ✗ {response.status_code} {response.text}")
 					continue  # members stay as they are
 				print(f"  ✓ {response.json().get('group_id')}")
-			failed += sync_members(existing["group_id"], roles, args.dry_run, tag)
+			if not user_id:
+				failed += sync_members(existing["group_id"], args.dry_run, tag)
 			continue
 
 		if response.ok:
@@ -252,6 +320,9 @@ def main():
 	others = sorted(n for n in on_obp if n not in {g["name"] for g in groups})
 	if others:
 		print(f"Left untouched (not in the sheet): {', '.join(others)}")
+	if user_id:
+		# Groups made in this run are not in on_obp; their ids are printed as they are.
+		failed += sync_user(user_id, {g["group_id"]: n for n, g in on_obp.items()}, args.dry_run, tag)
 	if failed:
 		print(f"✗ {failed} failure(s)")
 		return 1

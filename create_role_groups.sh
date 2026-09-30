@@ -9,7 +9,7 @@
 # All arguments are passed through.
 #
 # Usage:
-#   ./create_role_groups.sh [path/to/min_field_matrix.xlsx] [--dry-run]
+#   ./create_role_groups.sh [path/to/min_field_matrix.xlsx] [--user USERNAME [--provider PROVIDER]] [--dry-run]
 #
 # Notes:
 #   - Credentials/host come from your .env, same as the Python scripts.

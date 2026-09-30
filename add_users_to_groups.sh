@@ -4,10 +4,11 @@
 #
 # Add users to the OGCR Role Groups, as ticked in the users spreadsheet
 # (default DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx), by running
-# add_users_to_groups.py. Nobody is removed. All arguments are passed through.
+# add_users_to_groups.py. Nobody is removed unless --remove-unticked is given
+# (sync_user_group_permissions.sh does that for one user). All arguments are passed through.
 #
 # Usage:
-#   ./add_users_to_groups.sh [path/to/users.xlsx] [--sheet NAME] [--user USERNAME] [--dry-run]
+#   ./add_users_to_groups.sh [path/to/users.xlsx] [--sheet NAME] [--user USERNAME] [--remove-unticked] [--dry-run]
 #
 # Notes:
 #   - Credentials/host come from your .env, same as the Python scripts.

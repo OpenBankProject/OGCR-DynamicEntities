@@ -34,12 +34,14 @@ Auth is DirectLogin via obp_client.py, the same as the other scripts here.
 """
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from urllib.parse import quote
 
 
 from obp_client import token as DEFAULT_TOKEN, obp_host as DEFAULT_HOST, session
+from obp_space import SPACE_ID
 
 HERE = Path(__file__).parent
 
@@ -67,7 +69,7 @@ DOCS = {
         "description": (
             "Public registry listing: one row per certified activity, joined to its "
             "operator, country, certificate of compliance and verification status. "
-            "Reads system-level dynamic entities. Authentication is not required."
+            "Reads the dynamic entities of the ogcr space. Authentication is not required."
         ),
         "tags": "OGCR-Registry",
         "example_request_body": {},
@@ -136,7 +138,24 @@ def read_method_body(doc):
     text = (HERE / doc["scala_file"]).read_text()
     if text.lstrip().startswith("/*"):
         text = text.split("*/", 1)[1]
+    check_space(doc, text)
     return text.strip("\n")
+
+
+SPACE_BANK_ID_RE = re.compile(r'val SPACE_BANK_ID: Option\[String\] = (None|Some\("([^"]*)"\))')
+
+
+def check_space(doc, text):
+    """The Scala reads its entities from SPACE_BANK_ID, which must be the space the other scripts
+    create them in (OBP_ENTITY_SPACE_ID, see obp_space.py), or the endpoint would read another space."""
+    match = SPACE_BANK_ID_RE.search(text)
+    if not match:
+        raise SystemExit(f"{doc['scala_file']}: no `val SPACE_BANK_ID: Option[String] = ...` line found")
+    in_scala = match.group(2) or ""
+    if in_scala != SPACE_ID:
+        raise SystemExit(
+            f"{doc['scala_file']} reads bank id {in_scala or '(system level)'!r}, but OBP_ENTITY_SPACE_ID is "
+            f"{SPACE_ID or '(system level)'!r}. Change SPACE_BANK_ID in the .scala to match.")
 
 
 def build_payload(doc, include_body=True):

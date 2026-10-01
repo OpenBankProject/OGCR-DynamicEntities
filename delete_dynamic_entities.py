@@ -12,7 +12,7 @@ references it. Each pass deletes whatever it can; we stop once all target
 entities are gone, or once a pass makes no progress.
 
 Usage:
-    python3 delete_ogcr_entities.py [path/to/entities_output.txt] [--yes] [--token TOKEN]
+    python3 delete_dynamic_entities.py [path/to/entities_output.txt] [--yes] [--token TOKEN]
 
 Options:
     file (positional)  Path to the parsed entities file. Defaults to
@@ -21,7 +21,7 @@ Options:
     --token            DirectLogin token (overrides token from obp_client.py).
 
 Exits non-zero if any target entity could not be deleted, so callers under
-`set -e` (e.g. recreate_ogcr_entities.sh) abort instead of recreating on top
+`set -e` (e.g. recreate_dynamic_entities.sh) abort instead of recreating on top
 of a dirty instance.
 """
 

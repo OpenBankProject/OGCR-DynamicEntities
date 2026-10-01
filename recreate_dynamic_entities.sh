@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# recreate_ogcr_entities.sh
+# recreate_dynamic_entities.sh
 #
 # Recreate ONLY the OGCR dynamic entities from min_field_matrix.xlsx:
 #   0. Regenerate entities_output.txt (the list of OGCR entities) from the xlsx,
@@ -9,24 +9,25 @@
 #      dynamic entities on the instance are left untouched.
 #   2. Create the entities defined in min_field_matrix.xlsx.
 #   3. Create example/dummy objects for those entities.
-#   4. Create/update the Role Groups from the sheet's matrix (create_role_groups.sh).
-#   5. Add users to those groups from DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx (add_users_to_groups.sh),
+#   4. Recreate the Dynamic Resource Docs (recreate_dynamic_resource_docs.sh).
+#   5. Create/update the Role Groups from the sheet's matrix (create_role_groups.sh).
+#   6. Add users to those groups from DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx (add_users_to_groups.sh),
 #      if that file exists.
 #
 # Usage:
-#   ./recreate_ogcr_entities.sh [path/to/min_field_matrix.xlsx] [--yes] [--only]
+#   ./recreate_dynamic_entities.sh [path/to/min_field_matrix.xlsx] [--yes] [--only]
 #
-# --only recreates only the entities (steps 0-3), skipping the groups and users.
+# --only recreates only the entities (steps 0-3), skipping the resource docs, groups and users.
 #
-# Everything it prints is also saved to logs/recreate_ogcr_entities_<time>.log,
+# Everything it prints is also saved to logs/recreate_dynamic_entities_<time>.log,
 # with a header (host, space, sheet, git commit, options) and every timing, also
 # the fast ones the console leaves out -- a complete record to hand to someone
 # (or an agent) looking into the dynamic entities. logs/ is git-ignored: the log
-# can hold real usernames from step 5.
+# can hold real usernames from step 6.
 #
 # It first shows the host and space it will work on and asks for confirmation;
 # --yes skips the question (for automation). Without a terminal to ask on and
-# without --yes, it stops. Preview with ./dry_run_create_ogcr_entities.sh.
+# without --yes, it stops. Preview with ./dry_run_recreate_dynamic_entities.sh.
 #
 # Notes:
 #   - Token/host come from obp_client.py (or your .env), same as the Python scripts.
@@ -79,8 +80,10 @@ echo "   Host:     ${TARGET_HOST}"
 echo "   Entities: ${TARGET_SPACE}  (OBP_ENTITY_SPACE_ID=${TARGET_SPACE_ID})"
 echo "   Sheet:    ${MATRIX}"
 if [ "$ONLY_ENTITIES" = true ]; then
+  echo "   Docs:     skipped (--only)"
   echo "   Groups:   skipped (--only)"
 else
+  echo "   Docs:     recreate the Dynamic Resource Docs"
   echo "   Groups:   create/update from ${MATRIX}, then add users from ${USERS_SHEET}"
 fi
 echo " Existing records of those entities there will be lost."
@@ -102,11 +105,11 @@ echo
 # AND the log file. Unbuffered Python keeps its lines in order with the shell's.
 LOG_DIR="logs"
 mkdir -p "$LOG_DIR"
-LOG_FILE="${LOG_DIR}/recreate_ogcr_entities_$(date +%Y%m%d-%H%M%S).log"
+LOG_FILE="${LOG_DIR}/recreate_dynamic_entities_$(date +%Y%m%d-%H%M%S).log"
 export OGCR_LOG_FILE="$(pwd)/${LOG_FILE}"  # timing.py writes the fast timings here too
 export PYTHONUNBUFFERED=1
 {
-  echo "# recreate_ogcr_entities.sh log"
+  echo "# recreate_dynamic_entities.sh log"
   echo "# Started:  $(date -Is)"
   echo "# Host:     ${TARGET_HOST}"
   echo "# Entities: ${TARGET_SPACE}  (OBP_ENTITY_SPACE_ID=${TARGET_SPACE_ID})"
@@ -166,10 +169,10 @@ echo
 echo "=================================================="
 echo " STEP 1: Deleting the OGCR entities in ${ENTITY_LIST}"
 echo "=================================================="
-# delete_ogcr_entities.py deletes ONLY the entities listed in ${ENTITY_LIST} and
+# delete_dynamic_entities.py deletes ONLY the entities listed in ${ENTITY_LIST} and
 # exits non-zero if any survive; `set -e` then aborts so we never recreate on
 # top of leftovers.
-timed_step "Step 1: delete entities" "$PYTHON" delete_ogcr_entities.py "$ENTITY_LIST" --yes
+timed_step "Step 1: delete entities" "$PYTHON" delete_dynamic_entities.py "$ENTITY_LIST" --yes
 echo "OGCR entities deleted."
 
 echo
@@ -187,32 +190,45 @@ timed_step "Step 3: example data" "$PYTHON" create_dummy_data.py "$MATRIX"
 if [ "$ONLY_ENTITIES" = true ]; then
   echo
   echo "Done. Dynamic entities recreated and populated from ${MATRIX}."
-  echo "Role Groups and users skipped (--only)."
+  echo "Resource docs, Role Groups and users skipped (--only)."
   exit 0
 fi
 
 echo
 echo "=================================================="
-echo " STEP 4: Creating/updating Role Groups from ${MATRIX}"
+echo " STEP 4: Recreating the Dynamic Resource Docs"
 echo "=================================================="
-# A failure here stops the run: users can't be added to groups that aren't right.
-timed_step "Step 4: Role Groups" "$PYTHON" create_role_groups.py "$MATRIX"
+# The groups don't need the docs: report a failure but still finish the run.
+DOCS_FAILED=false
+timed_step "Step 4: resource docs" ./recreate_dynamic_resource_docs.sh --yes || DOCS_FAILED=true
 
 echo
 echo "=================================================="
-echo " STEP 5: Adding users to the Role Groups"
+echo " STEP 5: Creating/updating Role Groups from ${MATRIX}"
+echo "=================================================="
+# A failure here stops the run: users can't be added to groups that aren't right.
+timed_step "Step 5: Role Groups" "$PYTHON" create_role_groups.py "$MATRIX"
+
+echo
+echo "=================================================="
+echo " STEP 6: Adding users to the Role Groups"
 echo "=================================================="
 USERS_FAILED=false
 if [ -f "$USERS_SHEET" ]; then
   # Report failures (e.g. a user not on this OBP) but still finish the run.
-  timed_step "Step 5: add users" "$PYTHON" add_users_to_groups.py "$USERS_SHEET" || USERS_FAILED=true
+  timed_step "Step 6: add users" "$PYTHON" add_users_to_groups.py "$USERS_SHEET" || USERS_FAILED=true
 else
   echo "No ${USERS_SHEET}; skipping. Nobody was added to the groups."
 fi
 
 echo
-echo "Done. Dynamic entities recreated and populated from ${MATRIX}, Role Groups updated."
+echo "Done. Dynamic entities recreated and populated from ${MATRIX}, resource docs recreated, Role Groups updated."
+if [ "$DOCS_FAILED" = true ]; then
+  echo "✗ The Dynamic Resource Docs were not all recreated; see STEP 4 above." >&2
+fi
 if [ "$USERS_FAILED" = true ]; then
-  echo "✗ Some users could not be added to their groups; see STEP 5 above." >&2
+  echo "✗ Some users could not be added to their groups; see STEP 6 above." >&2
+fi
+if [ "$DOCS_FAILED" = true ] || [ "$USERS_FAILED" = true ]; then
   exit 1
 fi

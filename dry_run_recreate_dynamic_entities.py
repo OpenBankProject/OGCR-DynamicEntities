@@ -1,8 +1,8 @@
-"""DRY RUN of recreate_ogcr_entities.sh: say what it would do, without doing it.
+"""DRY RUN of recreate_dynamic_entities.sh: say what it would do, without doing it.
 
 Only reads (the spreadsheet, and GET requests to OBP); it creates, updates,
 deletes and grants nothing, and does not rewrite entities_output.txt. It walks
-the same steps as recreate_ogcr_entities.sh, in the same space
+the same steps as recreate_dynamic_entities.sh, in the same space
 (OBP_ENTITY_SPACE_ID; see obp_space.py):
 
   0. check the spreadsheet and parse its entities
@@ -14,7 +14,7 @@ the same steps as recreate_ogcr_entities.sh, in the same space
   and afterwards, what create_entitlements.sh would still need to grant.
 
 Usage:
-    python3 dry_run_create_ogcr_entities.py [path/to/min_field_matrix.xlsx]
+    python3 dry_run_recreate_dynamic_entities.py [path/to/min_field_matrix.xlsx]
 
 Exits 0 when the dry run completed (whatever it found), 1 if OBP could not be read.
 """
@@ -27,7 +27,7 @@ from fixtures import fixture_records
 from get_and_delete_dynamic_entities import get_all_system_dynamic_entities
 from obp_client import token, obp_host, session
 from obp_space import ROLE_BANK_ID, SPACE_ID, describe
-from ogcr_log_entity import LOG_ENTITY_NAME
+from dummy_data_creation_log_helpers import LOG_ENTITY_NAME
 from parse_minimum_fields import parse_xlsx_entities
 
 DEFAULT_SPREADSHEET = "min_field_matrix.xlsx"
@@ -162,8 +162,7 @@ def main():
 			f"{len({r.split('_', 1)[1] for r in missing_record})} entities")
 	else:
 		say("✓ All record Roles held")
-
-	heading("DRY RUN complete. Nothing was changed. Run ./recreate_ogcr_entities.sh to do it.")
+	# dry_run_recreate_dynamic_entities.sh prints the "DRY RUN complete" line, after the steps it previews itself.
 	return 0
 
 

@@ -167,10 +167,10 @@ builders stay consistent.
 | `obp_dynamic_api.py` | One path builder used everywhere: management URL becomes `/management/banks/<id>/dynamic-entities` when a space is set; same for update/delete by id. Note this is a genuine branch, not a prefix — the system form uses a different noun (`system-dynamic-entities`). |
 | `create_dummy_data.py` | Object paths become `/obp/dynamic-entity/banks/<id>/<entity>` — a pure prefix; `existing_object_ids` too. |
 | `parse_minimum_fields.py` | Thread the space through both create passes and `--update`. |
-| `delete_ogcr_entities.py`, `get_and_delete_dynamic_entities.py` | List and delete within the space only — must never touch another version's entities. |
+| `delete_dynamic_entities.py`, `get_and_delete_dynamic_entities.py` | List and delete within the space only — must never touch another version's entities. |
 | `add_join_indexes.py` | Fetch/PUT definitions within the space. |
 | `create_entitlements.py` | Grant **bank-level** roles (§7) — currently system-only. |
-| `recreate_ogcr_entities.sh` | Pass the space through; refuse to run if the bank doesn't exist, so a version is never half-created. |
+| `recreate_dynamic_entities.sh` | Pass the space through; refuse to run if the bank doesn't exist, so a version is never half-created. |
 
 Because the space is all-or-nothing, every one of these is the same mechanical edit:
 replace a hardcoded path with the shared builder. No per-entity branching anywhere.

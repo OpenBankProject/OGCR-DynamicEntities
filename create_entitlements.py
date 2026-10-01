@@ -17,7 +17,7 @@ Usage:
 import sys
 
 from dynamic_entities import add_entitlement_to_user
-from delete_ogcr_entities import DEFAULT_INPUT, parse_entity_names
+from delete_dynamic_entities import DEFAULT_INPUT, parse_entity_names
 from get_and_delete_dynamic_entities import get_all_system_dynamic_entities
 from obp_client import token, obp_host, session
 from obp_space import ROLE_BANK_ID, describe
@@ -56,7 +56,7 @@ role_names = [
 # Every (role_name, bank_id) wanted, in order: definition Roles, group Roles, then record Roles.
 wanted = [(m, ROLE_BANK_ID) for m in meta_role_names]
 # The Roles create_role_groups.py and add_users_to_groups.py need (steps 4 and 5 of
-# recreate_ogcr_entities.sh). Some are system level, so each carries its own bank id.
+# recreate_dynamic_entities.sh). Some are system level, so each carries its own bank id.
 wanted += GROUP_ADMIN_ROLES
 
 existing = get_all_system_dynamic_entities(token=token)  # raises if OBP cannot list them

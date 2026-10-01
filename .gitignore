@@ -142,5 +142,5 @@ entities_output.txt
 DO_NOT_COMMIT/
 *DO_NOT_COMMIT*
 
-# Run logs of recreate_ogcr_entities.sh (can hold real usernames). Never commit.
+# Run logs of recreate_dynamic_entities.sh (can hold real usernames). Never commit.
 logs/

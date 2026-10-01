@@ -167,7 +167,7 @@ def main():
         return 0
 
     # Surface the names of whatever survived, then fail with a non-zero exit so
-    # callers (e.g. recreate_ogcr_entities.sh under `set -e`) abort instead of
+    # callers (e.g. recreate_dynamic_entities.sh under `set -e`) abort instead of
     # recreating on top of a dirty instance.
     try:
         leftover = get_all_system_dynamic_entities(token=DIRECTLOGIN_TOKEN)["dynamic_entities"]

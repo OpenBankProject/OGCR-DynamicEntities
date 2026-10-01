@@ -8,7 +8,7 @@ Each `timed` block that takes longer than SHOW_ABOVE_SECONDS prints
 `⏱ <seconds>s  <label>` when it ends (even if it raises). `print_slowest`
 lists the slowest of those at the end of a script (the total still counts them all).
 
-When OGCR_LOG_FILE is set (recreate_ogcr_entities.sh sets it to its log), the
+When OGCR_LOG_FILE is set (recreate_dynamic_entities.sh sets it to its log), the
 faster blocks are written there too, so the log has every timing while the
 console only shows the slow ones.
 """

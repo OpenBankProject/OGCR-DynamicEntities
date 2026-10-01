@@ -12,7 +12,7 @@ for another, SYS for system level). Reported:
     (unless --structure-only) the description.
 
 A reference:X field whose entity X is not on OBP is expected as a string, as
-the create step makes it. The audit log entity (ogcr_log_entity.py) is not in the
+the create step makes it. The audit log entity (dummy_data_creation_log_helpers.py) is not in the
 sheet and is left out. Read-only: one GET.
 
 Usage:
@@ -29,7 +29,7 @@ import sys
 from obp_client import obp_host, session, token
 from obp_dynamic_api import BUILTIN_REFERENCE_TYPES, build_entity_definition_from_parsed
 from obp_space import SPACE_ID
-from ogcr_log_entity import LOG_ENTITY_NAME
+from dummy_data_creation_log_helpers import LOG_ENTITY_NAME
 from parse_minimum_fields import parse_xlsx_entities
 
 DEFAULT_SPREADSHEET = "min_field_matrix.xlsx"

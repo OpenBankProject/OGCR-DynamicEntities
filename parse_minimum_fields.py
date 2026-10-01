@@ -414,7 +414,7 @@ def main():
 				print(f"Failed to process entity {entity_name}: {e}")
 		return
 
-	# Non-interactive save (used by scripts, e.g. recreate_ogcr_entities.sh)
+	# Non-interactive save (used by scripts, e.g. recreate_dynamic_entities.sh)
 	if args.save:
 		_write_entities_file(entities, file_path, args.output)
 		return
@@ -430,7 +430,7 @@ def main():
 
 def _write_entities_file(entities, file_path, output_file):
 	"""Write parsed entities to `output_file` in the `Entity: <name>` format
-	consumed by delete_ogcr_entities.py."""
+	consumed by delete_dynamic_entities.py."""
 	try:
 		with open(output_file, 'w', encoding='utf-8') as f:
 			f.write(f"Parsed entities from: {file_path}\n")

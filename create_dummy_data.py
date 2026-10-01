@@ -35,7 +35,7 @@ from obp_space import record_path
 from parse_minimum_fields import parse_xlsx_entities
 from timing import print_slowest, timed
 from fixtures import fixture_records, resolve_name_field
-from ogcr_log_entity import (
+from dummy_data_creation_log_helpers import (
     ensure_log_entity,
     log_event,
     LOG_ENTITY_NAME,

@@ -148,7 +148,7 @@ def main(argv=None):
 			"(run ./create_role_groups.sh, or fix the header). Nothing was changed.")
 		return 1
 	if missing:
-		# A dry run of recreate_dynamic_entities.sh previews this before step 5 has made the groups.
+		# A dry run of recreate_dynamic_entities.sh previews this before step 4 has made the groups.
 		print(f"! No group at bank id {ROLE_BANK_ID} named: {', '.join(missing)} yet; "
 			"previewing as if ./create_role_groups.sh had created them (empty)")
 

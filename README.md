@@ -26,7 +26,7 @@ pip install -r requirements.txt
 - **`show_user_dynamic_entity_roles.py`** / **`.sh`**, **`show_user_dynamic_entity_paths.py`** / **`.sh`**, **`grant_user_dynamic_entity_roles.py`** / **`.sh`**: Look at, or grant, one user's dynamic entity Roles (see "One user's dynamic entity Roles").
 - **`diff_entities.py`** / **`.sh`**: Show how the dynamic entities on OBP, at the space's bank id (or `--bank-id`), differ from the spreadsheet: entities and fields only on one side, and per field the type, required, indexed, description and example (`--structure-only` skips the last two). Read-only; exits 1 when they differ.
 - **`role_groups.py`**: Reads that matrix (offline; used by the checker and `create_role_groups.py`).
-- **`dynamic_resource_docs.py`**, **`recreate_dynamic_resource_docs.sh`**: Manage the Dynamic Resource Docs (e.g. the public registry endpoint, `registry_activities_endpoint.scala`). The `.sh` compiles, deletes, recreates and checks each doc (step 4 of `recreate_dynamic_entities.sh`); `--dry-run` only compiles them and lists what is on OBP.
+- **`dynamic_resource_docs.py`**, **`recreate_dynamic_resource_docs.sh`**: Manage the Dynamic Resource Docs (e.g. the public registry endpoint, `registry_activities_endpoint.scala`). The `.sh` compiles, deletes, recreates and checks each doc (step 6 of `recreate_dynamic_entities.sh`); `--dry-run` only compiles them and lists what is on OBP.
 - **`dry_run_recreate_dynamic_entities.py`** / **`.sh`**: DRY RUN of `recreate_dynamic_entities.sh` — says what it would do, changes nothing.
 - **`create_space_bank.py`** / **`.sh`**: Create the `OBP_ENTITY_SPACE_ID` bank if it doesn't exist.
 - **`obp_space.py`**: The one place that builds dynamic-entity URLs and Role bank ids from `OBP_ENTITY_SPACE_ID`.
@@ -92,6 +92,7 @@ Notes about parsing behavior:
 - Column G is used as the `example` value for attributes when present.
 - Field names are sanitized: dots and other disallowed characters are replaced by underscore (`_`), repeated underscores are collapsed, and leading/trailing underscores are removed.
 - Example strings from column G have surrounding single or double quotes stripped.
+- A `number` field's example is always sent as a decimal (`6` → `6.0`). OBP's generated API docs (OpenAPI) take each field's type from its example, so a whole number would document the field as an integer; and the sheet can't carry the `.0`, because Excel stores `6.0` as `6` and pandas reads it back as an integer.
 
 **Check the spreadsheet (`check_min_field_matrix.sh`)**
 
@@ -108,34 +109,34 @@ Possible errors it can report:
 - unknown type in column D, or a misspelt `reference:` (e.g. `referece:`) — would become a string
 - `reference:<entity>` to an entity not defined in the sheet (and not built into OBP) — would become a string
 - two fields in one entity that end up with the same name
+- example in column G that does not fit its type (integer, number, boolean, `DATE_WITH_DAY`, json)
 - a Role Group cell that isn't made of the letters `C R U D`, or two groups with the same name
 
 Possible warnings it can report:
 - no `END_OF_FILE` row in column A
 - ticked field with an empty type
 - field name changed by sanitising (e.g. `monitoring period` → `monitoring_period`)
-- example in column G that does not fit its type (integer, number, boolean, `DATE_WITH_DAY`, json)
 - type in the wrong case (e.g. `Integer`)
 - Role Group access on a field row instead of the `Entity:` row (ignored), in lower case, or with a repeated letter
 
-The output lists only the problems actually found (`ERRORS FOUND` / `WARNINGS FOUND`). Exit code: `0` no errors, `1` errors (or warnings with `--strict`).
+The output lists only the problems actually found (`ERRORS FOUND` / `WARNINGS FOUND`). Exit code: `0` no errors, `1` errors (or warnings with `--strict`). `recreate_dynamic_entities.sh` runs it first and stops on any error, before anything on OBP is deleted.
 
 **Re-create the entities (delete then create from the spreadsheet)**
 
-**Preview it first with a DRY RUN.** `./dry_run_recreate_dynamic_entities.sh [path/to/min_field_matrix.xlsx]` walks the same steps as `recreate_dynamic_entities.sh` in the same space, but only reads (the sheet, and GET requests to OBP). Every line starts with `[DRY RUN]`, and it reports: problems in the sheet; whether the space's bank would be created; each entity it would delete, with its record count; entities in the space it would leave alone; each entity it would create; the example data; the Roles `create_entitlements.sh` would still need to grant; whether the Dynamic Resource Docs compile, and which are on OBP now; then the Role Groups it would create or update, and the users it would add to them. It doesn't rewrite `entities_output.txt`. Pass `--only` to preview just the entities.
+**Preview it first with a DRY RUN.** `./dry_run_recreate_dynamic_entities.sh [path/to/min_field_matrix.xlsx]` walks the same steps as `recreate_dynamic_entities.sh` in the same space, but only reads (the sheet, and GET requests to OBP). Every line starts with `[DRY RUN]`, and it reports: problems in the sheet; whether the space's bank would be created; each entity it would delete, with its record count; entities in the space it would leave alone; each entity it would create; the example data; the Roles `create_entitlements.sh` would still need to grant; then the Role Groups it would create or update, and the users it would add to them; and last, whether the Dynamic Resource Docs compile, and which are on OBP now. It doesn't rewrite `entities_output.txt`. Pass `--only` to preview just the entities.
 
 `recreate_dynamic_entities.sh` itself starts by showing the host, the space (`OBP_ENTITY_SPACE_ID`) and the sheet, and asks you to type `yes` before it changes anything. Pass `--yes` to skip the question in automation; without a terminal and without `--yes` it stops.
 
-After the entities and example data, it also runs `recreate_dynamic_resource_docs.sh` (step 4), `create_role_groups.py` (step 5) and then `add_users_to_groups.py` (step 6, only if `DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx` exists); see "Role Groups" below. A failure in step 5 stops the run. A resource doc that can't be recreated in step 4, or a user who can't be added in step 6 (e.g. not on this OBP), is reported, the rest still run, and the script exits 1 at the end. Pass `--only` to recreate only the entities and skip those three steps:
+After the entities and example data, it also runs `create_role_groups.py` (step 4), `add_users_to_groups.py` (step 5, only if `DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx` exists) and finally `recreate_dynamic_resource_docs.sh` (step 6); see "Role Groups" below. A failure in step 4 stops the run. A user who can't be added in step 5 (e.g. not on this OBP), or a resource doc that can't be recreated in step 6, is reported, the rest still run, and the script exits 1 at the end. Pass `--only` to recreate only the entities and skip those three steps:
 
 ```bash
-./recreate_dynamic_entities.sh                 # entities, example data, resource docs, Role Groups, users
+./recreate_dynamic_entities.sh                 # entities, example data, Role Groups, users, resource docs
 ./recreate_dynamic_entities.sh --only          # entities and example data only
 ```
 
 To see what takes a while: each step prints `⏱ <step>: <seconds>`, and a table of all the step times and the total is printed at the end, also when a step fails. Inside steps 1–3, each entity's delete, create, reference restore and example data gets its own `⏱` line if it takes over 1s, and each of those scripts ends with its 5 slowest operations. The example data timings would include writing the audit log records, but `recreate_dynamic_entities.sh` doesn't turn the audit log on (see `--log` below).
 
-Each run also writes a complete log to `logs/recreate_dynamic_entities_<date>-<time>.log`: everything printed on the console (errors included), plus every timing, including the ones under 1s that the console leaves out. It starts with a header giving the host, space, sheet, git commit and options, so it can be handed as-is to someone, or an agent, looking into the dynamic entities. The path is printed at the start and end of the run. `logs/` is git-ignored, because step 6 can write real usernames into it.
+Each run also writes a complete log to `logs/recreate_dynamic_entities_<date>-<time>.log`: everything printed on the console (errors included), plus every timing, including the ones under 1s that the console leaves out. It starts with a header giving the host, space, sheet, git commit and options, so it can be handed as-is to someone, or an agent, looking into the dynamic entities. The path is printed at the start and end of the run. `logs/` is git-ignored, because step 5 can write real usernames into it.
 
 A clean wipe-and-recreate driven entirely by the spreadsheet (this is what `main.py` does *not* do — `main.py` is tied to the hardcoded list in `dynamic_entities.py`):
 
@@ -170,7 +171,7 @@ Notes:
 Every entity needs Roles, all granted at the bank id of the space (`OBP_ENTITY_SPACE_ID`, or `SYS` for system level):
 - definition Roles: `CanCreateDynamicEntityDefinition`, `CanDeleteDynamicEntityDefinition`, `CanGetDynamicEntityDefinitions`, `CanUpdateDynamicEntityDefinition`
 - record Roles, per entity: `CanCreateDynamicEntityRecord_<entity>`, and the same for `Delete`, `Get` and `Update`
-- Role Group Roles, for steps 5 and 6 of `recreate_dynamic_entities.sh`: `CanCreateGroupAtOneBank`, `CanUpdateGroupAtOneBank`, `CanGetGroupsAtOneBank`, `CanAddUserToGroupAtOneBank`, `CanRemoveUserFromGroupAtOneBank`; plus `CanGetEntitlementsForAnyBank`, `CanGetAnyUser` and `CanDeleteEntitlementAtAnyBank` at system level (empty bank id)
+- Role Group Roles, for steps 4 and 5 of `recreate_dynamic_entities.sh`: `CanCreateGroupAtOneBank`, `CanUpdateGroupAtOneBank`, `CanGetGroupsAtOneBank`, `CanAddUserToGroupAtOneBank`, `CanRemoveUserFromGroupAtOneBank`; plus `CanGetEntitlementsForAnyBank`, `CanGetAnyUser` and `CanDeleteEntitlementAtAnyBank` at system level (empty bank id)
 
 Check that login works and which Roles are missing (read-only):
 

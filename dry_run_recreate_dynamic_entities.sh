@@ -48,25 +48,25 @@ complete() {
 
 "$PYTHON" dry_run_recreate_dynamic_entities.py "$MATRIX"
 if [ "$ONLY_ENTITIES" = true ]; then
-  echo "[DRY RUN] Resource docs, Role Groups and users would be skipped (--only)"
+  echo "[DRY RUN] Role Groups, users and resource docs would be skipped (--only)"
   complete
   exit 0
 fi
 
 echo "[DRY RUN]"
-echo "[DRY RUN] STEP 4: Dynamic Resource Docs"
-# Exits 1 when a doc doesn't compile; keep going so the whole preview shows.
-./recreate_dynamic_resource_docs.sh --dry-run || true
-
-echo "[DRY RUN]"
-echo "[DRY RUN] STEP 5: Role Groups from ${MATRIX}"
+echo "[DRY RUN] STEP 4: Role Groups from ${MATRIX}"
 # The group previews exit 1 when they find problems; keep going so the whole preview shows.
 "$PYTHON" create_role_groups.py "$MATRIX" --dry-run || true
 echo "[DRY RUN]"
-echo "[DRY RUN] STEP 6: Users from ${USERS_SHEET}"
+echo "[DRY RUN] STEP 5: Users from ${USERS_SHEET}"
 if [ -f "$USERS_SHEET" ]; then
   "$PYTHON" add_users_to_groups.py "$USERS_SHEET" --dry-run || true
 else
   echo "[DRY RUN] No ${USERS_SHEET}; nobody would be added to the groups"
 fi
+
+echo "[DRY RUN]"
+echo "[DRY RUN] STEP 6: Dynamic Resource Docs"
+# Exits 1 when a doc doesn't compile; keep going so the whole preview shows.
+./recreate_dynamic_resource_docs.sh --dry-run || true
 complete

@@ -15,14 +15,14 @@ POSSIBLE ERRORS it can report (the sheet does not say what it means):
   - reference to an entity not defined in the sheet and not built into OBP
     (the parser silently makes it a string)
   - two fields in one entity that end up with the same name
+  - example that does not fit its type (integer, number, boolean,
+    DATE_WITH_DAY, json)
   - Role Group matrix (columns R onwards, see role_groups.py): a cell that is
     not made of the letters C R U D, or two groups with the same name
 POSSIBLE WARNINGS it can report (probably fine, worth a look):
   - no END_OF_FILE marker
   - included field with an empty type (becomes a string)
   - field name changed by sanitising (e.g. dots or spaces become `_`)
-  - example that does not fit its type (integer, number, boolean,
-    DATE_WITH_DAY, json)
   - type written in a different case (e.g. `Integer`)
   - Role Group matrix: access on a field row instead of an `Entity:` row
     (ignored), lower case letters, or a repeated letter
@@ -193,7 +193,7 @@ def check(file_path):
 		if prop_type and example:
 			problem = example_problem(prop_type, example)
 			if problem:
-				warnings.append(f"G{excel_row}: example {example!r} for {current}.{field} ({prop_type}) {problem}")
+				errors.append(f"G{excel_row}: example {example!r} for {current}.{field} ({prop_type}) {problem}")
 
 	if not found_end:
 		warnings.append(f"no {END_MARKER} row in column A (the whole sheet was read)")

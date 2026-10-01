@@ -321,6 +321,14 @@ def build_entity_definition_from_parsed(name, parsed_fields, has_personal=False,
                 )
             example_value = None
 
+        # A 'number' field's example is always sent as a float (6 -> 6.0). OBP's
+        # generated API docs (OpenAPI) take each field's type from its example,
+        # so a whole-number example would document the field as an integer. The
+        # sheet can't be relied on to carry the .0: Excel stores 6.0 as 6, and
+        # pandas reads it back as int.
+        if prop_type == "number" and isinstance(example_value, int) and not isinstance(example_value, bool):
+            example_value = float(example_value)
+
         # String and reference examples must be JSON strings. Stringify any
         # non-string example (e.g. a JSON object like {"id":...,"version":...}
         # that landed on a reference field) so OBP accepts it.

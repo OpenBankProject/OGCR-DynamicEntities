@@ -15,6 +15,7 @@ Usage:
   python3 dynamic_resource_docs.py update registry_activities
   python3 dynamic_resource_docs.py delete registry_activities
   python3 dynamic_resource_docs.py verify registry_activities     # anonymous call, checks it is public
+  python3 dynamic_resource_docs.py verify registry_activities --wait 90   # retry a 404 while OBP's cache catches up
 
 `compile` is a true dry run: it returns compiler diagnostics with line numbers
 relative to the method body you wrote, and stores nothing. Always run it first.
@@ -36,6 +37,7 @@ import argparse
 import json
 import re
 import sys
+import time
 from pathlib import Path
 from urllib.parse import quote
 
@@ -212,10 +214,20 @@ def cmd_compile(name, doc, token, host):
     return 1
 
 
-def cmd_verify(name, doc, token, host):
-    """Call the endpoint with no credentials — the registry surface must be public."""
+def cmd_verify(name, doc, token, host, wait=0):
+    """Call the endpoint with no credentials — the registry surface must be public.
+
+    OBP caches its list of resource docs (dynamicResourceDoc.cache.ttl.seconds,
+    40 by default), so a doc just created 404s until that cache expires. `wait`
+    keeps retrying a 404 for up to that many seconds."""
     url = served_url(host, doc)
+    deadline = time.monotonic() + wait
     resp = session.get(url, timeout=60)
+    if resp.status_code == 404 and wait:
+        print(f"{name}: 404 at first; OBP caches resource docs, retrying for up to {wait}s ...")
+    while resp.status_code == 404 and time.monotonic() < deadline:
+        time.sleep(5)
+        resp = session.get(url, timeout=60)
     print(f"{name}: anonymous GET {url} -> HTTP {resp.status_code}")
     if resp.status_code != 200:
         print(resp.text[:500])
@@ -295,6 +307,8 @@ def main():
     parser.add_argument("doc", nargs="?", default="registry_activities", choices=sorted(DOCS) + [None])
     parser.add_argument("--token", default=None, help="DirectLogin token (overrides obp_client)")
     parser.add_argument("--host", default=None, help="OBP base URL (overrides OBP_HOSTNAME)")
+    parser.add_argument("--wait", type=int, default=0, metavar="SECONDS",
+                        help="verify: keep retrying a 404 for up to SECONDS (OBP caches resource docs, 40s by default)")
     args = parser.parse_args()
 
     token = args.token or DEFAULT_TOKEN
@@ -302,6 +316,8 @@ def main():
     if not token:
         raise SystemExit("No DirectLogin token. Check OBP_USERNAME / OBP_PASSWORD / OBP_CONSUMER_KEY in .env")
 
+    if args.command == "verify":
+        return cmd_verify(args.doc, DOCS[args.doc], token, host, wait=args.wait)
     return COMMANDS[args.command](args.doc, DOCS[args.doc], token, host)
 
 

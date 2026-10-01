@@ -8,7 +8,8 @@
 #      doc already on OBP is left in place.
 #   2. Delete the doc on OBP, if there is one.
 #   3. Create it again.
-#   4. Call it anonymously to check it is served and public.
+#   4. Call it anonymously to check it is served and public. OBP caches its list
+#      of resource docs (40s by default), so a 404 is retried for up to 90s.
 #
 # Usage:
 #   ./recreate_dynamic_resource_docs.sh [DOC ...] [--yes] [--dry-run]
@@ -102,7 +103,7 @@ for doc in "${DOC_NAMES[@]}"; do
   "$PYTHON" dynamic_resource_docs.py delete "$doc"
   "$PYTHON" dynamic_resource_docs.py create "$doc"
   # Report a failed check (e.g. the create is waiting for approval) but still do the other docs.
-  "$PYTHON" dynamic_resource_docs.py verify "$doc" || VERIFY_FAILED=true
+  "$PYTHON" dynamic_resource_docs.py verify "$doc" --wait 90 || VERIFY_FAILED=true
 done
 
 echo

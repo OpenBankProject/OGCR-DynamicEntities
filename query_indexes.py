@@ -7,7 +7,9 @@ rather than from the spreadsheet. obp_dynamic_api.should_index_field adds these
 fields to its baseline (references, <entity>_id, ALWAYS_INDEX_FIELD_NAMES).
 
 A declaration needs, on the entity it reads (`from`): every field its `where`
-filters on. On each joined entity: the join's `on` field, every field of the join's
+filters on, and every field it returns (`select`), because a caller may filter and
+sort the result on any of them (obp_filter, obp_sort_by), which OBP allows on
+indexed fields only. On each joined entity: the join's `on` field, every field of the join's
 `where`, and the field its `pick` / `order` sorts by (`latest_by:<field>`).
 
 A reverse join is linked by a field of the joined entity, which OBP looks up by
@@ -45,6 +47,8 @@ def needs_with_reasons(declaration):
 	if source:
 		for field in (declaration.get("where") or {}):
 			needs.append((source, field, "filtered by the query's where"))
+		for field in declaration.get("select") or []:
+			needs.append((source, field, "returned by the query, so callers may filter and sort on it"))
 	for join in declaration.get("join") or []:
 		entity = join.get("entity")
 		if not entity:

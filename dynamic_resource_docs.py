@@ -129,7 +129,18 @@ DOCS["registry_activities_query"] = {
     "description": "",
     "tags": DOCS["registry_activities"]["tags"],
     "example_request_body": {},
-    "success_response_body": DOCS["registry_activities"]["success_response_body"],
+    # The Scala doc's rows, plus the fields only the Query returns.
+    "success_response_body": {
+        "activities": [
+            {
+                **DOCS["registry_activities"]["success_response_body"]["activities"][0],
+                "internal_note": "string",
+                "minted_at": 1779280448,
+                "token_uri": "string",
+            }
+        ],
+        "count": 1,
+    },
 }
 
 

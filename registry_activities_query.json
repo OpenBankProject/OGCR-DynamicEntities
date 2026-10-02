@@ -45,6 +45,16 @@
         "certificate_issue_date": "issue_date",
         "certificate_expiry_date": "expiry_date"
       }
+    },
+    {
+      "entity": "activity_on_chain",
+      "on": "activity_id",
+      "cardinality": "at_most_one",
+      "pick": "latest_by:minted_at",
+      "fields": {
+        "minted_at": "minted_at",
+        "token_uri": "token_uri"
+      }
     }
   ],
   "envelope": { "rows": "activities", "count": "count" }

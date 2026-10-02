@@ -356,6 +356,14 @@ def cmd_delete(name, doc, token, host):
     resp = session.delete(url, headers=_headers(token))
     _raise_with_body(resp)
     print(f"{name}: deleted {doc_id}")
+    # OBP caches its list of docs (dynamicResourceDoc.cache.ttl.seconds, 40 by default), so
+    # the deleted doc stays listed for a while, and a `create` straight after would refuse
+    # it as already existing. Wait until the list no longer shows it.
+    deadline = time.monotonic() + 90
+    while find_existing(doc, token, host) and time.monotonic() < deadline:
+        time.sleep(5)
+    if find_existing(doc, token, host):
+        print(f"{name}: still listed by OBP 90s after the delete (its cache); a create may refuse it")
     return 0
 
 

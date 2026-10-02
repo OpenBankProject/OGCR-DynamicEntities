@@ -139,10 +139,14 @@ def main():
 		f"{len(to_recreate)} needing a recreate, {len(only_obp)} only on OBP")
 
 	failed = 0
+	updated = []
 	if not args.yes:
 		if to_create or to_update:
 			print("Nothing was changed. Run with --yes to apply the creates and updates.")
+	elif not (to_create or to_update):
+		print("\nNothing to apply: every entity that can be changed in place already matches the sheet.")
 	else:
+		print(f"\nApplying to {obp_host}, {describe()}:")
 		# New entities first, references to other new entities as strings, so no create waits on
 		# another; then every update, which now has all its reference targets.
 		created = set()
@@ -167,12 +171,24 @@ def main():
 				continue
 			try:
 				update_system_dynamic_entity(on_obp[name]["dynamic_entity_id"], build(name), token=token, base_url=obp_host)
+				updated.append(name)
 				print(f"✓ updated {name}")
 			except Exception as e:
 				failed += 1
 				print(f"✗ update {name} failed: {e}")
+		print("\n" + "=" * 50)
+		print(f" Done: {len(created)} created, {len(updated)} updated, {failed} failed")
+		print("=" * 50)
 		if created:
-			print(f"\nNew entities have new Roles: run ./create_role_groups.sh to give the groups theirs.")
+			print(f"  Created: {', '.join(sorted(created))}")
+		if updated:
+			print(f"  Updated: {', '.join(updated)}")
+		if updated or created:
+			print("  OBP builds any new indexes in the background.")
+		if created:
+			print("  New entities have new Roles: run ./create_role_groups.sh to give the groups theirs.")
+	if to_recreate or only_obp:
+		print(f"Still needing attention (see above): {len(to_recreate)} needing a recreate, {len(only_obp)} only on OBP.")
 
 	return 1 if to_recreate or only_obp or failed else 0
 

@@ -13,6 +13,7 @@ import json
 import re
 from obp_client import token as DEFAULT_TOKEN, obp_host as DEFAULT_HOST, session
 from obp_space import management_path
+from query_indexes import QUERY_INDEXED_FIELDS
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,9 @@ def should_index_field(entity_name, field_name, prop_type, declared_type=None):
     if isinstance(prop_type, str) and prop_type.startswith("reference:"):
         return True
     if field_name in ALWAYS_INDEX_FIELD_NAMES:
+        return True
+    # Fields the Dynamic Query declarations filter, join or sort on (query_indexes.py).
+    if field_name in QUERY_INDEXED_FIELDS.get(entity_name, ()):
         return True
     # <entity>_id, tolerating a prefix on the entity name.
     if field_name.endswith("_id") and entity_name.endswith(field_name[:-3]):

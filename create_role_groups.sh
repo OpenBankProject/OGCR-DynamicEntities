@@ -2,7 +2,7 @@
 #
 # create_role_groups.sh
 #
-# Create or update one OBP Group per Role Group column (R onwards) of
+# Create or update one OBP Group per Role Group column (S onwards) of
 # min_field_matrix.xlsx by running create_role_groups.py. Each group holds the
 # dynamic entity record Roles its column ticks (C/R/U/D per entity), at the bank
 # id of the entities' space (OBP_ENTITY_SPACE_ID, or SYS for system level).

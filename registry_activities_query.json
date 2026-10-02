@@ -1,0 +1,50 @@
+{
+  "from": "activity",
+  "select": [
+    "activity_id",
+    "name",
+    "summary",
+    "activity_type",
+    "country_id",
+    "city",
+    "start_date",
+    "end_date",
+    "monitoring_period_start_date",
+    "monitoring_period_end_date",
+    "operator_id"
+  ],
+  "join": [
+    {
+      "entity": "country",
+      "on": "country_id",
+      "fields": { "country_name": "country_name" }
+    },
+    {
+      "entity": "operator",
+      "on": "operator_id",
+      "fields": { "operator_legal_name": "legal_name" }
+    },
+    {
+      "entity": "activity_verification",
+      "on": "activity_id",
+      "cardinality": "exists",
+      "where": { "status_code": "eq:verified" },
+      "as": "verification_status",
+      "true_value": "verified",
+      "false_value": "unverified"
+    },
+    {
+      "entity": "certificate_of_compliance",
+      "on": "activity_id",
+      "cardinality": "at_most_one",
+      "pick": "latest_by:issue_date",
+      "fields": {
+        "certificate_of_compliance_id": "certificate_of_compliance_id",
+        "certification_status": "certification_status",
+        "certificate_issue_date": "issue_date",
+        "certificate_expiry_date": "expiry_date"
+      }
+    }
+  ],
+  "envelope": { "rows": "activities", "count": "count" }
+}

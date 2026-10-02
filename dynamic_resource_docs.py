@@ -16,6 +16,7 @@ Usage:
   python3 dynamic_resource_docs.py delete registry_activities
   python3 dynamic_resource_docs.py verify registry_activities     # anonymous call, checks it is public
   python3 dynamic_resource_docs.py verify registry_activities --wait 90   # retry a 404 while OBP's cache catches up
+  python3 dynamic_resource_docs.py create registry_activities_query   # the registry as a Dynamic Query, at the space's bank
 
 `compile` is a true dry run: it returns compiler diagnostics with line numbers
 relative to the method body you wrote, and stores nothing. Always run it first.
@@ -100,7 +101,33 @@ DOCS = {
             ],
             "count": 1,
         },
-    }
+    },
+}
+
+# The same registry as a Dynamic Query (programming_lang "Query", see OBP's "Dynamic Query"
+# glossary entry): a JSON declaration instead of Scala, which OBP runs without compiling
+# anything. A Query reads the entities of the space its doc belongs to, so this doc is
+# created at the bank of the space (OBP_ENTITY_SPACE_ID). It needs an OBP that has the
+# "Dynamic Query" commit (fd8f70691); older ones refuse programming_lang Query (OBP-40049).
+#
+# Unlike the Scala one it is not public: a Query refuses a caller who can't read every
+# entity it reads, and only `country` has public access. Its own URL keeps it from
+# clashing with the Scala doc at /registry/activities.
+DOCS["registry_activities_query"] = {
+    "query_file": "registry_activities_query.json",
+    "programming_lang": "Query",
+    "bank_id": SPACE_ID or None,
+    "public": False,
+    "request_verb": "GET",
+    "request_url": "/registry/activities-query",
+    "partial_function_name": "getRegistryActivitiesQuery",
+    "error_response_bodies": "OBP-50000: Unknown Error.",
+    "roles": "",
+    "summary": DOCS["registry_activities"]["summary"],
+    "description": "",
+    "tags": DOCS["registry_activities"]["tags"],
+    "example_request_body": {},
+    "success_response_body": DOCS["registry_activities"]["success_response_body"],
 }
 
 
@@ -131,12 +158,18 @@ def _raise_with_body(resp):
 
 
 def read_method_body(doc):
-    """Return the Scala body, with the leading block comment stripped.
+    """Return the method body: a Query's JSON declaration, or the Scala.
 
-    The .scala file opens with a /* ... */ header explaining the endpoint. That is for
+    A Query's .json is parsed here, so a syntax error is reported before anything is
+    sent, and sent compact. The .scala file opens with a /* ... */ header explaining the endpoint. That is for
     readers of this repo; sending it would only pad the stored code, and the wrapper
     counts lines when reporting compiler positions.
     """
+    if "query_file" in doc:
+        try:
+            return json.dumps(json.loads((HERE / doc["query_file"]).read_text()), separators=(",", ":"))
+        except ValueError as e:
+            raise SystemExit(f"{doc['query_file']}: not valid JSON: {e}")
     text = (HERE / doc["scala_file"]).read_text()
     if text.lstrip().startswith("/*"):
         text = text.split("*/", 1)[1]
@@ -172,6 +205,8 @@ def build_payload(doc, include_body=True):
         "tags": doc["tags"],
         "success_response_body": doc["success_response_body"],
     }
+    if "programming_lang" in doc:
+        payload["programming_lang"] = doc["programming_lang"]
     # OBP rejects a non-blank example_request_body on GET/DELETE — those verbs carry no
     # payload. The compile endpoint is laxer than create here, so a body that dry-runs
     # clean can still be refused on create.
@@ -183,9 +218,16 @@ def build_payload(doc, include_body=True):
     return payload
 
 
+def management_url(host, doc):
+    """The doc's management endpoint: at its bank when it has one, else system level."""
+    if doc.get("bank_id"):
+        return f"{host}/obp/v4.0.0/management/banks/{doc['bank_id']}/dynamic-resource-docs"
+    return f"{host}/obp/v4.0.0/management/dynamic-resource-docs"
+
+
 def find_existing(doc, token, host):
     """Return the stored doc whose request_verb + request_url match, or None."""
-    url = f"{host}/obp/v4.0.0/management/dynamic-resource-docs"
+    url = management_url(host, doc)
     resp = session.get(url, headers=_headers(token))
     _raise_with_body(resp)
     for existing in resp.json().get("dynamic-resource-docs", []):
@@ -199,6 +241,14 @@ def find_existing(doc, token, host):
 
 def cmd_compile(name, doc, token, host):
     """Dry run. Returns compiler problems; stores nothing."""
+    if doc.get("programming_lang") == "Query" and doc.get("bank_id"):
+        # OBP's compile endpoint checks a Query against the system-level entities, not the
+        # doc's bank, so it would judge this one against the wrong entities. Only the JSON
+        # is checked here; OBP checks the declaration against the bank's entities on create.
+        read_method_body(doc)
+        print(f"{name}: {doc['query_file']} is valid JSON; OBP checks it against bank "
+              f"{doc['bank_id']}'s entities when it is created")
+        return 0
     url = f"{host}/obp/v7.0.0/management/dynamic-resource-docs/compile"
     resp = session.post(url, headers=_headers(token), json=build_payload(doc))
     _raise_with_body(resp)
@@ -221,14 +271,18 @@ def cmd_verify(name, doc, token, host, wait=0):
     40 by default), so a doc just created 404s until that cache expires. `wait`
     keeps retrying a 404 for up to that many seconds."""
     url = served_url(host, doc)
+    # A doc that isn't public is called as the logged in user instead.
+    public = doc.get("public", True)
+    headers = {} if public else _headers(token)
+    who = "anonymous" if public else "logged in"
     deadline = time.monotonic() + wait
-    resp = session.get(url, timeout=60)
+    resp = session.get(url, headers=headers, timeout=60)
     if resp.status_code == 404 and wait:
         print(f"{name}: 404 at first; OBP caches resource docs, retrying for up to {wait}s ...")
     while resp.status_code == 404 and time.monotonic() < deadline:
         time.sleep(5)
-        resp = session.get(url, timeout=60)
-    print(f"{name}: anonymous GET {url} -> HTTP {resp.status_code}")
+        resp = session.get(url, headers=headers, timeout=60)
+    print(f"{name}: {who} GET {url} -> HTTP {resp.status_code}")
     if resp.status_code != 200:
         print(resp.text[:500])
         return 1
@@ -238,16 +292,18 @@ def cmd_verify(name, doc, token, host, wait=0):
 
 
 def cmd_list(_name, _doc, token, host):
-    url = f"{host}/obp/v4.0.0/management/dynamic-resource-docs"
-    resp = session.get(url, headers=_headers(token))
-    _raise_with_body(resp)
-    docs = resp.json().get("dynamic-resource-docs", [])
-    print(f"{len(docs)} dynamic resource doc(s) on {host}")
-    for d in docs:
-        print(
-            f"  {d.get('request_verb','?'):6} {d.get('request_url','?'):40} "
-            f"{d.get('dynamic_resource_doc_id','')}"
-        )
+    """The docs at system level, and at each bank a doc in DOCS lives at."""
+    banks = [None] + sorted({d["bank_id"] for d in DOCS.values() if d.get("bank_id")})
+    for bank in banks:
+        resp = session.get(management_url(host, {"bank_id": bank}), headers=_headers(token))
+        _raise_with_body(resp)
+        docs = resp.json().get("dynamic-resource-docs", [])
+        print(f"{len(docs)} dynamic resource doc(s) on {host} at {f'bank {bank}' if bank else 'system level'}")
+        for d in docs:
+            print(
+                f"  {d.get('request_verb','?'):6} {d.get('request_url','?'):40} "
+                f"{d.get('dynamic_resource_doc_id','')}"
+            )
     return 0
 
 
@@ -257,8 +313,7 @@ def cmd_create(name, doc, token, host):
             f"{name}: a doc already exists for {doc['request_verb']} {doc['request_url']}. "
             "Use `update`."
         )
-    url = f"{host}/obp/v4.0.0/management/dynamic-resource-docs"
-    resp = session.post(url, headers=_headers(token), json=build_payload(doc))
+    resp = session.post(management_url(host, doc), headers=_headers(token), json=build_payload(doc))
     _raise_with_body(resp)
     created = resp.json()
     print(f"{name}: created {created.get('dynamic_resource_doc_id')}")
@@ -271,7 +326,7 @@ def cmd_update(name, doc, token, host):
     if not existing:
         raise SystemExit(f"{name}: nothing to update — no doc for {doc['request_url']}. Use `create`.")
     doc_id = existing["dynamic_resource_doc_id"]
-    url = f"{host}/obp/v4.0.0/management/dynamic-resource-docs/{doc_id}"
+    url = f"{management_url(host, doc)}/{doc_id}"
     resp = session.put(url, headers=_headers(token), json=build_payload(doc))
     _raise_with_body(resp)
     print(f"{name}: updated {doc_id}")
@@ -284,7 +339,7 @@ def cmd_delete(name, doc, token, host):
         print(f"{name}: nothing to delete")
         return 0
     doc_id = existing["dynamic_resource_doc_id"]
-    url = f"{host}/obp/v4.0.0/management/dynamic-resource-docs/{doc_id}"
+    url = f"{management_url(host, doc)}/{doc_id}"
     resp = session.delete(url, headers=_headers(token))
     _raise_with_body(resp)
     print(f"{name}: deleted {doc_id}")

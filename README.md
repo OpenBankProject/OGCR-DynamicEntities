@@ -20,7 +20,7 @@ pip install -r requirements.txt
 - **`check_min_field_matrix.py`** / **`.sh`**: Check the spreadsheet for problems before creating anything (offline, read-only).
 - **`check_login_and_roles.py`** / **`.sh`**: Check DirectLogin works and the user holds the Roles the entities need (read-only).
 - **`create_entitlements.py`** / **`.sh`**: Grant the logged in user those Roles.
-- **`create_role_groups.py`** / **`.sh`**: Create or update the OBP Groups defined by the spreadsheet's Role Group matrix (columns R onwards).
+- **`create_role_groups.py`** / **`.sh`**: Create or update the OBP Groups defined by the spreadsheet's Role Group matrix (columns S onwards).
 - **`add_users_to_groups.py`** / **`.sh`**: Add users to those groups, as ticked in `DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx`.
 - **`sync_user_group_permissions.py`** / **`.sh`**: Bring one user's group memberships (added and removed, as ticked in that sheet) and Roles (in every group they are in) up to date.
 - **`show_user_dynamic_entity_roles.py`** / **`.sh`**, **`show_user_dynamic_entity_paths.py`** / **`.sh`**, **`grant_user_dynamic_entity_roles.py`** / **`.sh`**: Look at, or grant, one user's dynamic entity Roles (see "One user's dynamic entity Roles").
@@ -216,7 +216,7 @@ The show scripts only read, and need `CanGetAnyUser`. Checking that entities exi
 
 **Role Groups (`create_role_groups.sh`)**
 
-The spreadsheet's first sheet has a Role Group matrix, starting at column R and running right until the first empty header. Row 1 holds each group's name (R1 = `Operator`, S1 = `Certification Scheme`, T1 = `Certification Body`, U1 = `Parcel Owner Verifier`). Where a group's column crosses an `Entity: <name>` row, the letters say which of that entity's record endpoints the group may call:
+The spreadsheet's first sheet has a Role Group matrix, starting at column S and running right until the first empty header. Row 1 holds each group's name (S1 = `Operator`, T1 = `Certification Scheme`, U1 = `Certification Body`, V1 = `Parcel Owner Verifier`, W1 = `Authority (National)`, X1 = `Authority (EU)`). Column R (`HideFieldFromPublicAccess`) is not read yet; if its header isn't found there, the columns have moved and no Role Groups are read. Where a group's column crosses an `Entity: <name>` row, the letters say which of that entity's record endpoints the group may call:
 
 | Letter | Endpoints | Role |
 |---|---|---|

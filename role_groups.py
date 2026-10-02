@@ -1,7 +1,7 @@
 """Read the Role Group matrix from the minimum fields spreadsheet (min_field_matrix.xlsx).
 
-Columns R onwards of the first sheet, up to the first empty header, are Role
-Groups: row 1 holds the group's name (e.g. R1 = Operator), and the cell where a
+Columns S onwards of the first sheet, up to the first empty header, are Role
+Groups: row 1 holds the group's name (e.g. S1 = Operator), and the cell where a
 group's column crosses an `Entity: <name>` row says which of that entity's
 record endpoints the group may call:
 
@@ -26,8 +26,12 @@ import pandas as pd
 from obp_space import ROLE_BANK_ID
 
 END_MARKER = "END_OF_FILE"
-# Column R. The sheet says not to move columns, so the matrix starts here.
-FIRST_GROUP_COLUMN = 17
+# Column S. The sheet says not to move columns, so the matrix starts here.
+FIRST_GROUP_COLUMN = 18
+# The header of the column just before the matrix (R). If it isn't there, columns have
+# been inserted or removed and the matrix is not where FIRST_GROUP_COLUMN says, so
+# nothing is read rather than a wrong column being taken for a group.
+COLUMN_BEFORE_GROUPS = "HideFieldFromPublicAccess"
 
 ROLE_PREFIX_BY_LETTER = {
 	"C": "CanCreateDynamicEntityRecord_",
@@ -53,7 +57,7 @@ GROUP_ADMIN_ROLES = [
 
 
 def column_letter(idx):
-	"""0-based column index -> Excel letter(s), e.g. 17 -> R."""
+	"""0-based column index -> Excel letter(s), e.g. 18 -> S."""
 	letters = ""
 	idx += 1
 	while idx:
@@ -68,7 +72,7 @@ def roles_for(entity_name, access):
 
 
 def _group_columns(df):
-	"""[(index, name)] of the group columns: from R, until the first empty header.
+	"""[(index, name)] of the group columns: from S, until the first empty header.
 	pandas names an empty header 'Unnamed: N'."""
 	columns = []
 	for idx in range(FIRST_GROUP_COLUMN, len(df.columns)):
@@ -88,6 +92,13 @@ def parse_role_groups(file_path):
 	"""
 	df = pd.read_excel(file_path, engine="openpyxl")
 	errors, warnings = [], []
+	before = column_letter(FIRST_GROUP_COLUMN - 1)
+	header_before = str(df.columns[FIRST_GROUP_COLUMN - 1]).strip() if len(df.columns) >= FIRST_GROUP_COLUMN else ""
+	if header_before != COLUMN_BEFORE_GROUPS:
+		errors.append(f"{before}1: expected the header {COLUMN_BEFORE_GROUPS!r} just before the Role Group matrix "
+			f"(which starts at {column_letter(FIRST_GROUP_COLUMN)}), found {header_before!r}. Columns have moved; "
+			f"update FIRST_GROUP_COLUMN in role_groups.py. No Role Groups were read.")
+		return [], errors, warnings
 	columns = _group_columns(df)
 	groups = [{"name": name, "column": column_letter(idx), "access": {}} for idx, name in columns]
 

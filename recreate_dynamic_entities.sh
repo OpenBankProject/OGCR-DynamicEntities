@@ -9,7 +9,8 @@
 #   1. Delete ONLY those OGCR entities on OBP (objects + definitions). Other
 #      dynamic entities on the instance are left untouched.
 #   2. Create the entities defined in min_field_matrix.xlsx.
-#   3. Create example/dummy objects for those entities.
+#   3. Create example/dummy objects for those entities, then the registry's
+#      dummy records (create_registry_dummy_data.sh).
 #   4. Create/update the Role Groups from the sheet's matrix (create_role_groups.sh).
 #   5. Add users to those groups from DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx (add_users_to_groups.sh),
 #      if that file exists.
@@ -190,11 +191,18 @@ echo "=================================================="
 echo " STEP 3: Creating example data from ${MATRIX}"
 echo "=================================================="
 timed_step "Step 3: example data" "$PYTHON" create_dummy_data.py "$MATRIX"
+# Report a failure but still finish the run.
+REGISTRY_FAILED=false
+timed_step "Step 3: registry data" ./create_registry_dummy_data.sh "$MATRIX" || REGISTRY_FAILED=true
 
 if [ "$ONLY_ENTITIES" = true ]; then
   echo
   echo "Done. Dynamic entities recreated and populated from ${MATRIX}."
   echo "Role Groups, users and resource docs skipped (--only)."
+  if [ "$REGISTRY_FAILED" = true ]; then
+    echo "✗ Some registry dummy records were not created; see STEP 3 above." >&2
+    exit 1
+  fi
   exit 0
 fi
 
@@ -227,12 +235,15 @@ timed_step "Step 6: resource docs" ./recreate_dynamic_resource_docs.sh --yes || 
 
 echo
 echo "Done. Dynamic entities recreated and populated from ${MATRIX}, Role Groups updated, resource docs recreated."
+if [ "$REGISTRY_FAILED" = true ]; then
+  echo "✗ Some registry dummy records were not created; see STEP 3 above." >&2
+fi
 if [ "$USERS_FAILED" = true ]; then
   echo "✗ Some users could not be added to their groups; see STEP 5 above." >&2
 fi
 if [ "$DOCS_FAILED" = true ]; then
   echo "✗ The Dynamic Resource Docs were not all recreated; see STEP 6 above." >&2
 fi
-if [ "$DOCS_FAILED" = true ] || [ "$USERS_FAILED" = true ]; then
+if [ "$DOCS_FAILED" = true ] || [ "$USERS_FAILED" = true ] || [ "$REGISTRY_FAILED" = true ]; then
   exit 1
 fi

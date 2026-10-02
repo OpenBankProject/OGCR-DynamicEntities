@@ -1,6 +1,6 @@
 """Create or update one OBP Group per Role Group in the minimum fields spreadsheet.
 
-The Role Group matrix (columns R onwards of min_field_matrix.xlsx; see
+The Role Group matrix (columns S onwards of min_field_matrix.xlsx; see
 role_groups.py) says which record endpoints each group may call on each entity.
 Each column becomes an OBP Group, named after its header, at the bank id of the
 entities' space (OBP_ENTITY_SPACE_ID, or SYS for system level; see obp_space.py),
@@ -224,7 +224,7 @@ def main():
 			"(./check_min_field_matrix.sh). Nothing was changed.")
 		return 1
 	if not groups:
-		print(f"No Role Group columns found from column R of {args.file}. Nothing to do.")
+		print(f"No Role Group columns found from column S of {args.file}. Nothing to do.")
 		return 0
 	if not token:
 		print("✗ DirectLogin failed")

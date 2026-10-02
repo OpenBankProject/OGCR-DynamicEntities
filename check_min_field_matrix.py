@@ -17,7 +17,7 @@ POSSIBLE ERRORS it can report (the sheet does not say what it means):
   - two fields in one entity that end up with the same name
   - example that does not fit its type (integer, number, boolean,
     DATE_WITH_DAY, json)
-  - Role Group matrix (columns R onwards, see role_groups.py): a cell that is
+  - Role Group matrix (columns S onwards, see role_groups.py): a cell that is
     not made of the letters C R U D, or two groups with the same name
 POSSIBLE WARNINGS it can report (probably fine, worth a look):
   - no END_OF_FILE marker

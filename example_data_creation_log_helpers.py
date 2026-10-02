@@ -1,10 +1,10 @@
-"""Helpers for the optional audit log of dummy data creation, kept in a dynamic entity on OBP.
+"""Helpers for the optional audit log of example data creation, kept in a dynamic entity on OBP.
 
 This module defines a single dynamic entity named after this application
 (`ogcr_dynamicentities_log`, in the same space as the other entities -- see
 obp_space.py) and the helpers needed to (a) make sure it exists on OBP and
-(b) write one log record to it per event while dummy data is being created. It is
-consumed by `create_dummy_data.py`, only when that is run with `--log` (logging
+(b) write one log record to it per event while example data is being created. It is
+consumed by `create_example_data.py`, only when that is run with `--log` (logging
 is off by default, and recreate_dynamic_entities.sh does not turn it on). It records:
   - `entity_created`  one record per successfully created object;
   - `entity_failed`   one record per object that failed to POST.

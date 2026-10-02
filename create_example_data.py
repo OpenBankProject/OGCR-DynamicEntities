@@ -1,8 +1,8 @@
-"""Create one dummy object per OGCR dynamic entity, driven by the spreadsheet.
+"""Create one example object per OGCR dynamic entity, driven by the spreadsheet.
 
 Field values are taken from the spreadsheet `example` column (option 2), while
 foreign-key fields are overwritten with the real id of the referenced object so
-the dummy data is referentially consistent (option 1).
+the example data is referentially consistent (option 1).
 
 How it works:
   1. Parse the spreadsheet (`parse_xlsx_entities`) to get each entity's fields,
@@ -20,7 +20,7 @@ How it works:
      rows instead of a single example, skipping any already present.
 
 Usage:
-    python3 create_dummy_data.py [path/to/min_field_matrix.xlsx] [--token TOKEN]
+    python3 create_example_data.py [path/to/min_field_matrix.xlsx] [--token TOKEN]
 """
 
 import argparse
@@ -35,7 +35,7 @@ from obp_space import record_path
 from parse_minimum_fields import parse_xlsx_entities
 from timing import print_slowest, timed
 from fixtures import fixture_records, resolve_name_field
-from dummy_data_creation_log_helpers import (
+from example_data_creation_log_helpers import (
     ensure_log_entity,
     log_event,
     LOG_ENTITY_NAME,
@@ -235,7 +235,7 @@ def build_canonical_ids(entities):
     return canonical
 
 
-def build_payload(entity_name, wrap, canonical, entity_names, real_ids, created):
+def build_payload(entity_name, wrap, canonical, entity_names, real_ids, created, fixture_ids=None):
     """Build a POST payload, resolving foreign keys to real ids.
 
     `created` is the set of entities whose record already exists on OBP; only
@@ -243,6 +243,10 @@ def build_payload(entity_name, wrap, canonical, entity_names, real_ids, created)
     the referenced record exists. `real_ids` supplies the id VALUE to use for a
     created entity (its OBP id, or the canonical id OBP preserved). It is
     pre-seeded from `canonical` and upgraded to each create response's id.
+
+    `fixture_ids` maps each fixtured entity to the ids it has stored. A
+    reference to one keeps the spreadsheet example when that id is stored
+    (`country_id = DE` stays DE), and only falls back to `real_ids` otherwise.
 
     Returns `(payload, references)`, where `references` is a list of
     `{field, target, resolution, value}` dicts describing every `reference:<x>`
@@ -266,7 +270,11 @@ def build_payload(entity_name, wrap, canonical, entity_names, real_ids, created)
         if ref is not None:
             is_optional = raw_key.endswith(" (optional)")
             if ref in created:
-                val = real_ids.get(ref, canonical.get(ref))
+                example = coerce_value(meta)
+                if fixture_ids and example in fixture_ids.get(ref, ()):
+                    val = example
+                else:
+                    val = real_ids.get(ref, canonical.get(ref))
                 payload[cf] = val
                 references.append(
                     {"field": cf, "target": ref, "resolution": "resolved", "value": str(val)}
@@ -334,14 +342,14 @@ def create_object(entity_name, data, token=None):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Create dummy objects for the OGCR dynamic entities from the spreadsheet.")
+    parser = argparse.ArgumentParser(description="Create example objects for the OGCR dynamic entities from the spreadsheet.")
     parser.add_argument("file", nargs="?", default=DEFAULT_SPREADSHEET, help=f"Spreadsheet path (default: {DEFAULT_SPREADSHEET}).")
     parser.add_argument("--token", default=default_token, help="DirectLogin token (overrides obp_client.py).")
     parser.add_argument("--log", action="store_true", help=f"Record creation/errors/fallbacks in the {LOG_ENTITY_NAME} dynamic entity (off by default).")
     parser.add_argument("--fixtures-only", action="store_true", help="Only write the controlled vocabularies from fixtures.py, leaving every other entity untouched. Rows already present are skipped, so this tops up a partially populated table.")
     args = parser.parse_args()
 
-    logger.info("Starting Dummy Data Creation Script")
+    logger.info("Starting Example Data Creation Script")
     print_separator()
 
     entities = parse_xlsx_entities(args.file)
@@ -382,6 +390,8 @@ def main():
     print_separator("-")
     total = len(ordered)
     created_names = set()
+    # Stored ids of each fixtured entity, so references keep a valid sheet example.
+    fixture_ids = {}
     counters = {"created": 0, "failed": 0, "skipped": 0, "count": 0}
 
     def _attempt_fixture(ename):
@@ -421,7 +431,7 @@ def main():
                 continue
             # Build from the spreadsheet so any other field keeps its declared
             # type and example, then pin the id and name from the fixture.
-            payload, references = build_payload(ename, entities[ename], canonical, entity_names, real_ids, created_names)
+            payload, references = build_payload(ename, entities[ename], canonical, entity_names, real_ids, created_names, fixture_ids)
             payload[id_field] = fixture_id
             if name_field:
                 payload[name_field] = display_name
@@ -459,7 +469,9 @@ def main():
                         message=str(e), references=references, token=args.token,
                     )
         if present:
-            # Foreign keys to this entity point at the first fixture row.
+            # Foreign keys to this entity keep their sheet example when it is
+            # one of these rows, else point at the first fixture row.
+            fixture_ids[ename] = present
             real_ids[ename] = rows[0][0] if rows[0][0] in present else sorted(present)[0]
             created_names.add(ename)
         logger.info(
@@ -481,7 +493,7 @@ def main():
         counters["count"] += 1
         idx = counters["count"]
         wrap = entities[ename]
-        payload, references = build_payload(ename, wrap, canonical, entity_names, real_ids, created_names)
+        payload, references = build_payload(ename, wrap, canonical, entity_names, real_ids, created_names, fixture_ids)
         try:
             resp = create_object(ename, payload, token=args.token)
             obj = resp.get(ename, resp)
@@ -551,7 +563,7 @@ def main():
 
     print_separator("-")
     logger.info(
-        f"Dummy Data Summary: {counters['created']} created, "
+        f"Example Data Summary: {counters['created']} created, "
         f"{counters['skipped']} already present, {counters['failed']} failed"
     )
     print_slowest()

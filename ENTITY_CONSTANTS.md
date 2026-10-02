@@ -130,7 +130,7 @@ all_projects = response[list_key]
 - Uses all entity constants to manage the lifecycle of dynamic entities
 - Creates, deletes, and recreates entities
 
-### `create_dummy_data.py`
+### `create_example_data.py`
 - Uses entity constants to create test data
 - Uses helper functions to parse API responses
 

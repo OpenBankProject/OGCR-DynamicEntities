@@ -11,7 +11,8 @@
     "end_date",
     "monitoring_period_start_date",
     "monitoring_period_end_date",
-    "operator_id"
+    "operator_id",
+    "internal_note"
   ],
   "join": [
     {

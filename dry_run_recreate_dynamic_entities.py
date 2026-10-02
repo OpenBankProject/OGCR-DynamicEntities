@@ -9,8 +9,8 @@ the same steps as recreate_dynamic_entities.sh, in the same space
      ... create the space's bank, if it is missing
   1. delete the OGCR entities in the sheet that exist now (records + definition)
   2. create every entity in the sheet
-  3. create the dummy data and the controlled vocabularies (without the audit log,
-     which create_dummy_data.py only writes with --log)
+  3. create the example data and the controlled vocabularies (without the audit log,
+     which create_example_data.py only writes with --log)
   and afterwards, what create_entitlements.sh would still need to grant.
 
 Usage:
@@ -27,7 +27,7 @@ from fixtures import fixture_records
 from get_and_delete_dynamic_entities import get_all_system_dynamic_entities
 from obp_client import token, obp_host, session
 from obp_space import ROLE_BANK_ID, SPACE_ID, describe
-from dummy_data_creation_log_helpers import LOG_ENTITY_NAME
+from example_data_creation_log_helpers import LOG_ENTITY_NAME
 from parse_minimum_fields import parse_xlsx_entities
 
 DEFAULT_SPREADSHEET = "min_field_matrix.xlsx"
@@ -135,7 +135,7 @@ def main():
 		say(f"WOULD CREATE {name}: {len(fields)} fields ({len(fields) - optional} required){public}")
 	say(f"= {len(entities)} entities")
 
-	# --- STEP 3: dummy data ---------------------------------------------------------------
+	# --- STEP 3: example data -------------------------------------------------------------
 	heading("STEP 3: Create the example data")
 	objects = 0
 	for name in entities:
@@ -146,7 +146,7 @@ def main():
 		else:
 			objects += 1
 	say(f"WOULD CREATE one example object for each of the other {len(entities) - sum(1 for n in entities if fixture_records(n))} entities")
-	say(f"= about {objects} objects (not logged to {LOG_ENTITY_NAME}: create_dummy_data.py only logs with --log)")
+	say(f"= about {objects} objects (not logged to {LOG_ENTITY_NAME}: create_example_data.py only logs with --log)")
 
 	# --- Roles, for create_entitlements.sh ------------------------------------------------
 	heading(f"Roles at bank id {ROLE_BANK_ID} (granted separately by ./create_entitlements.sh)")

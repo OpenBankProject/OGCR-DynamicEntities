@@ -13,12 +13,14 @@ see obp_space.py), the same way diff_entities.py does, and sorts it:
   recreate   a structural change to an entity that has records: left alone
   unchanged  matches the sheet
 
-OBP's rule for an entity that has records (isSchemaCompatibleChange): the same fields
-with the same types, and no field newly required. Descriptions, examples, indexed,
+OBP's rule for an entity that has records (isSchemaCompatibleChange): every existing
+field keeps its name and type, and no field becomes required. New optional fields may
+be added (the stored records just don't have them); descriptions, examples, indexed,
 lengths and the access flags may change freely, and a field may stop being required.
-An entity with no records takes any change. So a field added, removed or retyped, or
-newly required, on an entity with records is "recreate": the message says so, and
-what to do instead. Entities on OBP that the sheet no longer has are listed and left
+An entity with no records takes any change. So a field removed or retyped, or a field
+(new or existing) made required, on an entity with records is "recreate": the message
+says so, and what to do instead. An OBP older than this rule refuses new fields too,
+with OBP-09023, which is reported as a failed update. Entities on OBP that the sheet no longer has are listed and left
 alone.
 
 Without --yes nothing is changed: it only reports what it would do.
@@ -35,7 +37,7 @@ import argparse
 import sys
 
 from diff_entities import diff_entity, env_bool, get_entities_on_obp
-from dummy_data_creation_log_helpers import LOG_ENTITY_NAME
+from example_data_creation_log_helpers import LOG_ENTITY_NAME
 from obp_client import obp_host, token
 from obp_dynamic_api import (
 	BUILTIN_REFERENCE_TYPES,
@@ -51,14 +53,13 @@ DEFAULT_SPREADSHEET = "min_field_matrix.xlsx"
 
 def structural_changes(name, expected, actual):
 	"""Why OBP would refuse this update on an entity with records, as lines (empty: it would accept it).
-	Mirrors OBP's DynamicEntityHelper.isSchemaCompatibleChange."""
+	Mirrors OBP's DynamicEntityHelper.isSchemaCompatibleChange: a new field is fine unless it is
+	required, which the newly-required check reports."""
 	want = expected[name]
 	have = actual.get("schema") or {}
 	want_types = {field: prop["type"] for field, prop in want["properties"].items()}
 	have_types = {field: prop.get("type", "") for field, prop in (have.get("properties") or {}).items()}
 	reasons = []
-	for field in sorted(set(want_types) - set(have_types)):
-		reasons.append(f"field {field} added")
 	for field in sorted(set(have_types) - set(want_types)):
 		reasons.append(f"field {field} removed")
 	for field in sorted(f for f in want_types if f in have_types and want_types[f] != have_types[f]):

@@ -3,7 +3,7 @@
 # dry_run_recreate_dynamic_entities.sh
 #
 # DRY RUN of recreate_dynamic_entities.sh: reports what it would do -- create the
-# space's bank, delete, create, dummy data, the Roles still needed, the Dynamic
+# space's bank, delete, create, example data, the Roles still needed, the Dynamic
 # Resource Docs, the Role Groups and the users added to them -- without doing any
 # of it. Only reads the spreadsheets and makes GET requests, plus a POST to OBP's
 # resource doc compile endpoint, which stores nothing.

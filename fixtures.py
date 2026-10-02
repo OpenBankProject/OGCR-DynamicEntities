@@ -1,9 +1,9 @@
 """Controlled vocabularies that must exist on every run.
 
 The spreadsheet drives the entity *definitions* plus one example record each
-(see `create_dummy_data.py`). A few entities are not examples at all: they are
+(see `create_example_data.py`). A few entities are not examples at all: they are
 fixed lists of values the rest of the system selects from. Those belong here,
-in code, so every run of `create_dummy_data.py` (and therefore every run of
+in code, so every run of `create_example_data.py` (and therefore every run of
 `recreate_dynamic_entities.sh`) ends with exactly these rows in the table.
 
 A fixture is a list of rows for one entity. A row is either:

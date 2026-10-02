@@ -26,7 +26,7 @@ pip install -r requirements.txt
 - **`show_user_dynamic_entity_roles.py`** / **`.sh`**, **`show_user_dynamic_entity_paths.py`** / **`.sh`**, **`grant_user_dynamic_entity_roles.py`** / **`.sh`**: Look at, or grant, one user's dynamic entity Roles (see "One user's dynamic entity Roles").
 - **`diff_entities.py`** / **`.sh`**: Show how the dynamic entities on OBP, at the space's bank id (or `--bank-id`), differ from the spreadsheet: entities and fields only on one side, and per field the type, required, indexed, description and example (`--structure-only` skips the last two). Read-only; exits 1 when they differ.
 - **`check_openapi_field_types.py`** / **`.sh`**: Download OBP's generated OpenAPI document for the dynamic entities (`/obp/v7.0.0/resource-docs/OBPv7.0.0/openapi.yaml?content=dynamic`) and check every field's type in it, in every operation, against the spreadsheet, at `OBP_HOSTNAME` and in the space (`OBP_ENTITY_SPACE_ID`), as set in `.env`. OBP generates those types from the fields' examples, so they can be wrong even when the entities are right. Anonymous and read-only; exits 1 when any type differs.
-- **`update_dynamic_entities.py`** / **`.sh`**: Bring the entity definitions on OBP up to date with the spreadsheet in place, without deleting anything, so records and users' Role grants (and the emails a re-grant sends) stay. New entities are created and changed ones updated; a structural change (a field added, removed, retyped or newly required) to an entity that has records is not made, and the message says to recreate or use a new space. Reports only, unless given `--yes`.
+- **`update_dynamic_entities.py`** / **`.sh`**: Bring the entity definitions on OBP up to date with the spreadsheet in place, without deleting anything, so records and users' Role grants (and the emails a re-grant sends) stay. New entities are created and changed ones updated; a structural change (a field removed, retyped or made required) to an entity that has records is not made; a new optional field is added in place, and the message says to recreate or use a new space. Reports only, unless given `--yes`.
 - **`role_groups.py`**: Reads that matrix (offline; used by the checker and `create_role_groups.py`).
 - **`dynamic_resource_docs.py`**, **`recreate_dynamic_resource_docs.sh`**: Manage the Dynamic Resource Docs (e.g. the public registry endpoint, `registry_activities_endpoint.scala`). The `.sh` compiles, deletes, recreates and checks each doc (step 6 of `recreate_dynamic_entities.sh`); `--dry-run` only compiles them and lists what is on OBP.
 - **`dry_run_recreate_dynamic_entities.py`** / **`.sh`**: DRY RUN of `recreate_dynamic_entities.sh` — says what it would do, changes nothing.
@@ -42,7 +42,7 @@ All OGCR entities live in one place: either at system level, or under one bank (
 | empty | `/obp/<v>/management/system-dynamic-entities` | `/obp/dynamic-entity/[public/]<entity>` | `SYS` |
 | `ogcr` (default) | `/obp/<v>/management/banks/ogcr/dynamic-entities` | `/obp/dynamic-entity/banks/ogcr/[public/]<entity>` | `ogcr` |
 
-Every script (create, update, delete, dummy data, Roles, join indexes, audit log) builds its URLs from `obp_space.py`, so they always agree, and deleting only ever touches entities in the configured space. This replaces the old `OBP_ENTITY_PREFIX`, which has been removed.
+Every script (create, update, delete, example data, Roles, join indexes, audit log) builds its URLs from `obp_space.py`, so they always agree, and deleting only ever touches entities in the configured space. This replaces the old `OBP_ENTITY_PREFIX`, which has been removed.
 
 The bank must exist before entities can be created in it. `recreate_dynamic_entities.sh` creates it if it's missing, or run it on its own:
 
@@ -265,12 +265,12 @@ Step 1 is `add_users_to_groups.py --user USERNAME --remove-unticked`: added to t
 
 The groups don't depend on the entities existing. `recreate_dynamic_entities.sh` runs both scripts after recreating the entities, unless given `--only`. Needs `CanCreateGroupAtOneBank`, `CanUpdateGroupAtOneBank` and `CanGetGroupsAtOneBank` at the space's bank id (or the `...AtAllBanks` versions); updating members also needs `CanAddUserToGroupAtOneBank` and `CanRemoveUserFromGroupAtOneBank` (all granted by `create_entitlements.sh`).
 
-**Create dummy data**
+**Create example data**
 
-`create_dummy_data.py` creates one sample object per entity, driven by the same spreadsheet. Run it *after* the entities exist on OBP (see "Re-create the entities" above):
+`create_example_data.py` creates one sample object per entity, driven by the same spreadsheet. Run it *after* the entities exist on OBP (see "Re-create the entities" above):
 
 ```bash
-python3 create_dummy_data.py [path/to/min_field_matrix.xlsx] [--token TOKEN]
+python3 create_example_data.py [path/to/min_field_matrix.xlsx] [--token TOKEN]
 ```
 
 - **`file`** (positional): spreadsheet path. Defaults to `min_field_matrix.xlsx`.
@@ -279,11 +279,11 @@ python3 create_dummy_data.py [path/to/min_field_matrix.xlsx] [--token TOKEN]
 
 How it works:
 - **Values come from the spreadsheet** — each field is populated from its column G `example` value, coerced to the field's declared type (string, `integer`, `number`, `boolean`, `json`, `DATE_WITH_DAY`).
-- **Foreign keys are made valid** — any `<entity>_id` field is overwritten with the real id of the referenced object, so the dummy data is referentially consistent (e.g. `activity.operator_id` points at the created `operator`, and `audit_report` links to the operator, activity, scheme, body, plans and certificate).
+- **Foreign keys are made valid** — any `<entity>_id` field is overwritten with the real id of the referenced object, so the example data is referentially consistent (e.g. `activity.operator_id` points at the created `operator`, and `audit_report` links to the operator, activity, scheme, body, plans and certificate).
 - Entities that own an `<entity>_id` field get a canonical id taken from the spreadsheet example; the verification/report entities without one receive an OBP-generated UUID.
 - The field `compliance_certificate_id` (which does not follow the `<entity>_id` convention) is mapped to `certificate_of_compliance` via an explicit alias in the script (`FK_ALIASES`).
 
-- **The run can be audited in OBP** — off by default. Only when `--log` is given does the script ensure a dynamic entity named after this application, `ogcr_dynamicentities_log` (in the same space as the other entities), exists (defined in `dummy_data_creation_log_helpers.py`) and write one record to it per object: `entity_created` for each created object and `entity_failed` for each failed create (with the OBP error text). Each record carries `entity_name`, `entity_id`, `status`, `message`, a UTC `timestamp`, and a json `references` list describing **every** `reference:<x>` field on the entity and how it resolved — each item has `field`, `target`, `resolution` (`resolved` = a real created id was used; `fallback` = the spreadsheet example value was used because the target is a static OBP entity or one we don't create here) and the `value` posted. Logging is best-effort: if the log entity cannot be created or a record fails to POST, the data creation continues uninterrupted.
+- **The run can be audited in OBP** — off by default. Only when `--log` is given does the script ensure a dynamic entity named after this application, `ogcr_dynamicentities_log` (in the same space as the other entities), exists (defined in `example_data_creation_log_helpers.py`) and write one record to it per object: `entity_created` for each created object and `entity_failed` for each failed create (with the OBP error text). Each record carries `entity_name`, `entity_id`, `status`, `message`, a UTC `timestamp`, and a json `references` list describing **every** `reference:<x>` field on the entity and how it resolved — each item has `field`, `target`, `resolution` (`resolved` = a real created id was used; `fallback` = the spreadsheet example value was used because the target is a static OBP entity or one we don't create here) and the `value` posted. Logging is best-effort: if the log entity cannot be created or a record fails to POST, the data creation continues uninterrupted.
 
 Notes:
 - It creates **one record per entity**. To create more (e.g. several parcels under one activity), extend the payload loop in `main()`.
@@ -309,7 +309,7 @@ Currently ticked: `country`, `technologies_practices_processes`.
 
 **Fixtures (controlled vocabularies)**
 
-Some entities are not examples but fixed lists of values the rest of the system selects from. These live in `fixtures.py`, not in the spreadsheet, and `create_dummy_data.py` writes the whole list instead of a single example row — so every run of `recreate_dynamic_entities.sh` ends with exactly those rows present.
+Some entities are not examples but fixed lists of values the rest of the system selects from. These live in `fixtures.py`, not in the spreadsheet, and `create_example_data.py` writes the whole list instead of a single example row — so every run of `recreate_dynamic_entities.sh` ends with exactly those rows present.
 
 Currently fixtured:
 - **`technologies_practices_processes`** — the 28 technologies/practices/processes an activity can declare. Ids are `UPPERCASE_WITH_UNDERSCORES` and the label is derived from the id in proper case, with acronyms in `fixtures.ACRONYMS` left uppercase (`GEOLOGICAL_CO2_STORAGE` → `Geological CO2 Storage`, `..._BECCS` → `... BECCS`).
@@ -327,7 +327,7 @@ How a fixture is written:
 Topping up an existing instance:
 
 ```bash
-python3 create_dummy_data.py --fixtures-only     # writes only the fixtured entities
+python3 create_example_data.py --fixtures-only     # writes only the fixtured entities
 ```
 
 `--fixtures-only` skips every non-fixtured entity, so it will not duplicate (or error on) the single example rows those already have. Combined with the skip-if-present behaviour, it is the way to add newly defined fixture values, or to retry rows that failed, without a full wipe-and-recreate.

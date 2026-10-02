@@ -69,7 +69,7 @@ live in parallel.
 
 Consequence of the space rule: each version carries **its own copy** of the
 vocabularies (249 countries, 28 practices) at its own public URL. That is cheap to
-create — `create_dummy_data.py --fixtures-only` populates them — but it means the
+create — `create_example_data.py --fixtures-only` populates them — but it means the
 open-data URL is version-specific by design, not stable across versions.
 
 ## 3. ⚠️ Naming collision to resolve first
@@ -165,7 +165,7 @@ builders stay consistent.
 | File | Change |
 |---|---|
 | `obp_dynamic_api.py` | One path builder used everywhere: management URL becomes `/management/banks/<id>/dynamic-entities` when a space is set; same for update/delete by id. Note this is a genuine branch, not a prefix — the system form uses a different noun (`system-dynamic-entities`). |
-| `create_dummy_data.py` | Object paths become `/obp/dynamic-entity/banks/<id>/<entity>` — a pure prefix; `existing_object_ids` too. |
+| `create_example_data.py` | Object paths become `/obp/dynamic-entity/banks/<id>/<entity>` — a pure prefix; `existing_object_ids` too. |
 | `parse_minimum_fields.py` | Thread the space through both create passes and `--update`. |
 | `delete_dynamic_entities.py`, `get_and_delete_dynamic_entities.py` | List and delete within the space only — must never touch another version's entities. |
 | `add_join_indexes.py` | Fetch/PUT definitions within the space. |
@@ -253,7 +253,7 @@ Note the path segment (§5) does not change role names — they are not path-der
    is byte-for-byte what it is today — verify that before going further.
 3. **Create the version bank** and grant entitlements (§7).
 4. **Populate** the space: entities from the spreadsheet, then
-   `create_dummy_data.py --fixtures-only` for the vocabularies.
+   `create_example_data.py --fixtures-only` for the vocabularies.
 5. **App:** path helper + role names + env, still defaulting to system level.
 6. **Cut over** one environment by setting `OBP_ENTITY_SPACE_ID` in both repos.
    **Rollback = unset it.**

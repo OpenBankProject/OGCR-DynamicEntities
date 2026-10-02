@@ -90,7 +90,7 @@ def diff_entity(name, expected, actual, structure_only):
 		if field not in want_props:
 			lines.append(f"  - {field} ({have_props[field].get('type')}): on OBP, not in the sheet")
 
-	checks = ["type", "indexed"] + ([] if structure_only else ["description", "example"])
+	checks = ["type", "indexed", "hide_field_from_public_access"] + ([] if structure_only else ["description", "example"])
 	for field, want in want_props.items():
 		have = have_props.get(field)
 		if have is None:
@@ -98,7 +98,7 @@ def diff_entity(name, expected, actual, structure_only):
 		changes = []
 		for key in checks:
 			w, h = want.get(key), have.get(key)
-			if key == "indexed":
+			if key in ("indexed", "hide_field_from_public_access"):
 				w, h = bool(w), bool(h)
 			if w != h:
 				changes.append(f"{key}: sheet {show(w)}, OBP {show(h)}")

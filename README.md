@@ -217,7 +217,7 @@ The show scripts only read, and need `CanGetAnyUser`. Checking that entities exi
 
 **Role Groups (`create_role_groups.sh`)**
 
-The spreadsheet's first sheet has a Role Group matrix, starting at column S and running right until the first empty header. Row 1 holds each group's name (S1 = `Operator`, T1 = `Certification Scheme`, U1 = `Certification Body`, V1 = `Parcel Owner Verifier`, W1 = `Authority (National)`, X1 = `Authority (EU)`). Column R (`HideFieldFromPublicAccess`) is not read yet; if its header isn't found there, the columns have moved and no Role Groups are read. Where a group's column crosses an `Entity: <name>` row, the letters say which of that entity's record endpoints the group may call:
+The spreadsheet's first sheet has a Role Group matrix, starting at column S and running right until the first empty header. Row 1 holds each group's name (S1 = `Operator`, T1 = `Certification Scheme`, U1 = `Certification Body`, V1 = `Parcel Owner Verifier`, W1 = `Authority (National)`, X1 = `Authority (EU)`). Column R (`HideFieldFromPublicAccess`) is ticked on field rows: on an entity with public access (column Q), that field is sent as `"hide_field_from_public_access": true`, so it is hidden from callers whose only access is the public one (anyone not logged in, for instance); callers holding the entity's read Role still see it. `check_min_field_matrix.sh` warns about a tick on an entity row (ignored) or on a field of an entity without public access (no effect). If column R's header isn't found just before the matrix, the columns have moved and no Role Groups are read. Where a group's column crosses an `Entity: <name>` row, the letters say which of that entity's record endpoints the group may call:
 
 | Letter | Endpoints | Role |
 |---|---|---|

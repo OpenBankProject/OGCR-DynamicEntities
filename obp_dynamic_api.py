@@ -366,6 +366,11 @@ def build_entity_definition_from_parsed(name, parsed_fields, has_personal=False,
         if should_index_field(name, key, prop_type, declared_type):
             prop_def["indexed"] = True
 
+        # Column R (HideFieldFromPublicAccess): on a public entity, hidden from callers whose
+        # only access is the public one. Sent only when ticked.
+        if isinstance(example, dict) and example.get("hide_field_from_public_access"):
+            prop_def["hide_field_from_public_access"] = True
+
         properties[key] = prop_def
         if not optional:
             required.append(key)

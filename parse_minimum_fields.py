@@ -53,6 +53,22 @@ def _normalise_header(value):
 	return re.sub(r"[\s_]+", "", str(value)).strip().lower()
 
 
+# Header of the field-level column that hides a field of a public entity from public
+# reads (OBP's hide_field_from_public_access). Matched by header text, like the above.
+HIDE_FROM_PUBLIC_HEADERS = {
+	"hidefieldfrompublicaccess",
+	"hidefrompublicaccess",
+}
+
+
+def _find_hide_from_public_column(df):
+	"""Index of the HideFieldFromPublicAccess column, or None when absent (nothing hidden)."""
+	for idx, header in enumerate(df.columns):
+		if _normalise_header(header) in HIDE_FROM_PUBLIC_HEADERS:
+			return idx
+	return None
+
+
 def _find_public_access_column(df):
 	"""Index of the EntityHasPublicAccess column, or None when absent.
 
@@ -86,6 +102,7 @@ def parse_xlsx_entities(file_path):
 		# Entity-level public-read flag, read from the EntityHasPublicAccess
 		# column on each `Entity: <name>` row (absent column -> always False).
 		public_access_col = _find_public_access_column(df)
+		hide_from_public_col = _find_hide_from_public_column(df)
 		current_entity_public = False
 
 		# Iterate through rows
@@ -168,6 +185,11 @@ def parse_xlsx_entities(file_path):
 					# Check for green check marks in columns B and C
 					has_green_check_b = _has_green_checkmark(col_b_str)
 					has_green_check_c = _has_green_checkmark(col_c_str)
+					# Hidden from public reads: a tick on the field row (entity rows are ignored).
+					hide_from_public = False
+					if hide_from_public_col is not None and len(row) > hide_from_public_col:
+						flag = row.iloc[hide_from_public_col]
+						hide_from_public = _has_green_checkmark(str(flag)) if pd.notna(flag) else False
 
 					if has_green_check_b:
 						# Column B has green check - add normally; preserve column D as value
@@ -177,6 +199,8 @@ def parse_xlsx_entities(file_path):
 							entry["example"] = cleaned_example
 						if col_f_str:
 							entry["description"] = col_f_str
+						if hide_from_public:
+							entry["hide_field_from_public_access"] = True
 						current_dict[safe_key] = entry
 					elif has_green_check_c:
 						# Column C has green check but not B - mark as optional
@@ -186,6 +210,8 @@ def parse_xlsx_entities(file_path):
 							entry["example"] = cleaned_example
 						if col_f_str:
 							entry["description"] = col_f_str
+						if hide_from_public:
+							entry["hide_field_from_public_access"] = True
 						current_dict[opt_key] = entry
 				# If neither B nor C has green check, skip this row
 

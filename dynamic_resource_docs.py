@@ -110,14 +110,16 @@ DOCS = {
 # created at the bank of the space (OBP_ENTITY_SPACE_ID). It needs an OBP that has the
 # "Dynamic Query" commit (fd8f70691); older ones refuse programming_lang Query (OBP-40049).
 #
-# Unlike the Scala one it is not public: a Query refuses a caller who can't read every
-# entity it reads, and only `country` has public access. Its own URL keeps it from
+# This script does not decide who may call it. OBP does, per caller, from the access
+# settings of the entities the Query reads: a caller who can't read one of them gets a
+# 403, and a field hidden from that caller comes back null. So whether the registry is
+# public, and which of its columns are, is set on the entity definitions. `verify` calls
+# it anonymously, as the app's public registry pages do. Its own URL keeps it from
 # clashing with the Scala doc at /registry/activities.
 DOCS["registry_activities_query"] = {
     "query_file": "registry_activities_query.json",
     "programming_lang": "Query",
     "bank_id": SPACE_ID or None,
-    "public": False,
     "request_verb": "GET",
     "request_url": "/registry/activities-query",
     "partial_function_name": "getRegistryActivitiesQuery",

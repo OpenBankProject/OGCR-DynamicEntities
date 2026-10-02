@@ -44,7 +44,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from role_groups import parse_role_groups
+from role_groups import column_letter, parse_role_groups
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_INPUT = "min_field_matrix.xlsx"
@@ -70,9 +70,12 @@ def load_definitions(filename, names):
 
 
 parser_defs = load_definitions("parse_minimum_fields.py",
-	["_has_green_checkmark", "PUBLIC_ACCESS_HEADERS", "_normalise_header", "_find_public_access_column"])
+	["_has_green_checkmark", "PUBLIC_ACCESS_HEADERS", "HIDE_FROM_PUBLIC_HEADERS", "_normalise_header",
+	 "_find_public_access_column", "_find_hide_from_public_column"])
 api_defs = load_definitions("obp_dynamic_api.py", ["SCALAR_ALLOWED_TYPES", "BUILTIN_REFERENCE_TYPES"])
 has_green_checkmark = parser_defs["_has_green_checkmark"]
+find_public_access_column = parser_defs["_find_public_access_column"]
+find_hide_from_public_column = parser_defs["_find_hide_from_public_column"]
 SCALAR_ALLOWED_TYPES = api_defs["SCALAR_ALLOWED_TYPES"]
 BUILTIN_REFERENCE_TYPES = api_defs["BUILTIN_REFERENCE_TYPES"]
 
@@ -135,6 +138,9 @@ def check(file_path):
 	seen_fields = {}    # (entity, sanitised field) -> cell
 	current = None
 	found_end = False
+	public_col = find_public_access_column(df)
+	hide_col = find_hide_from_public_column(df)
+	public_entities = set()
 
 	for index, row in df.iterrows():
 		excel_row = index + 2  # header is row 1
@@ -152,6 +158,11 @@ def check(file_path):
 				errors.append(f"{cell}: entity {current!r} is already defined at A{entities[current]}")
 			entities[current] = excel_row
 			field_counts[current] = 0
+			if public_col is not None and has_green_checkmark(cell_str(row, public_col)):
+				public_entities.add(current)
+			if hide_col is not None and has_green_checkmark(cell_str(row, hide_col)):
+				warnings.append(f"{column_letter(hide_col)}{excel_row}: HideFieldFromPublicAccess on the entity row of "
+					f"{current} is ignored; tick it on the field rows to hide")
 			continue
 
 		if not current or not col_a or col_a == "nan":
@@ -170,6 +181,10 @@ def check(file_path):
 			errors.append(f"A{excel_row}: field {field!r} in {current} is already defined at {seen_fields[key]} "
 				"(the later one wins)")
 		seen_fields[key] = f"A{excel_row}"
+
+		if hide_col is not None and has_green_checkmark(cell_str(row, hide_col)) and current not in public_entities:
+			warnings.append(f"{column_letter(hide_col)}{excel_row}: {current}.{field} is hidden from public access, but "
+				f"{current} has no public access, so it has no effect")
 
 		declared = cell_str(row, 3)
 		type_cell = f"D{excel_row}"

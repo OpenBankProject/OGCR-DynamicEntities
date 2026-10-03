@@ -16,12 +16,23 @@ Usage:
 
 import sys
 
-from dynamic_entities import add_entitlement_to_user
 from delete_dynamic_entities import DEFAULT_INPUT, parse_entity_names
 from get_and_delete_dynamic_entities import get_all_system_dynamic_entities
 from obp_client import token, obp_host, session
 from obp_space import ROLE_BANK_ID, describe
 from role_groups import GROUP_ADMIN_ROLES
+
+
+def add_entitlement_to_user(token, user_id, role_name, bank_id=""):
+	"""Grant `role_name` at `bank_id` to the user; returns OBP's JSON response."""
+	# v7.0.0: the older versions reject the SYS bank id with OBP-30001 Bank not found.
+	response = session.post(f"{obp_host}/obp/v7.0.0/users/{user_id}/entitlements",
+		headers={"Authorization": f"DirectLogin token={token}", "Content-Type": "application/json"},
+		json={"bank_id": bank_id, "role_name": role_name})
+	if not response.ok:
+		print(response, response.text)
+	return response.json()
+
 
 entities_file = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_INPUT
 entity_names = parse_entity_names(entities_file)

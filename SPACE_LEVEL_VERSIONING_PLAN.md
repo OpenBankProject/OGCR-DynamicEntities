@@ -168,7 +168,6 @@ builders stay consistent.
 | `create_example_data.py` | Object paths become `/obp/dynamic-entity/banks/<id>/<entity>` — a pure prefix; `existing_object_ids` too. |
 | `parse_minimum_fields.py` | Thread the space through both create passes and `--update`. |
 | `delete_dynamic_entities.py`, `get_and_delete_dynamic_entities.py` | List and delete within the space only — must never touch another version's entities. |
-| `add_join_indexes.py` | Fetch/PUT definitions within the space. |
 | `create_entitlements.py` | Grant **bank-level** roles (§7) — currently system-only. |
 | `recreate_dynamic_entities.sh` | Pass the space through; refuse to run if the bank doesn't exist, so a version is never half-created. |
 

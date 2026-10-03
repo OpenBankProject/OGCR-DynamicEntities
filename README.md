@@ -14,26 +14,76 @@ pip install -r requirements.txt
   - **OBP_HOSTNAME:** (optional) OBP base URL; defaults in `obp_client.py`
   - **OBP_ENTITY_SPACE_ID:** (optional) the bank id (aka Space) that owns all the OGCR dynamic entities. Defaults to `ogcr`; set it to the empty string for system level. See "Where the entities live" below.
 
-**Files**
-- **`parse_minimum_fields.py`**: Parse the minimal field matrix Excel (`min_field_matrix.xlsx` by default) and optionally create dynamic entities on OBP.
-- **`main.py`**: High-level management script that deletes objects, deletes matching dynamic entities, then recreates entities defined in `dynamic_entities.py`.
-- **`check_min_field_matrix.py`** / **`.sh`**: Check the spreadsheet for problems before creating anything (offline, read-only).
-- **`check_login_and_roles.py`** / **`.sh`**: Check DirectLogin works and the user holds the Roles the entities need (read-only).
-- **`create_entitlements.py`** / **`.sh`**: Grant the logged in user those Roles.
-- **`create_role_groups.py`** / **`.sh`**: Create or update the OBP Groups defined by the spreadsheet's Role Group matrix (columns S onwards).
-- **`add_users_to_groups.py`** / **`.sh`**: Add users to those groups, as ticked in `DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx`.
-- **`sync_user_group_permissions.py`** / **`.sh`**: Bring one user's group memberships (added and removed, as ticked in that sheet) and Roles (in every group they are in) up to date.
-- **`show_user_dynamic_entity_roles.py`** / **`.sh`**, **`show_user_dynamic_entity_paths.py`** / **`.sh`**, **`grant_user_dynamic_entity_roles.py`** / **`.sh`**: Look at, or grant, one user's dynamic entity Roles (see "One user's dynamic entity Roles").
-- **`diff_entities.py`** / **`.sh`**: Show how the dynamic entities on OBP, at the space's bank id (or `--bank-id`), differ from the spreadsheet: entities and fields only on one side, and per field the type, required, indexed, description and example (`--structure-only` skips the last two). Read-only; exits 1 when they differ.
-- **`check_openapi_field_types.py`** / **`.sh`**: Download OBP's generated OpenAPI document for the dynamic entities (`/obp/v7.0.0/resource-docs/OBPv7.0.0/openapi.yaml?content=dynamic`) and check every field's type in it, in every operation, against the spreadsheet, at `OBP_HOSTNAME` and in the space (`OBP_ENTITY_SPACE_ID`), as set in `.env`. OBP generates those types from the fields' examples, so they can be wrong even when the entities are right. Anonymous and read-only; exits 1 when any type differs.
-- **`update_dynamic_entities.py`** / **`.sh`**: Bring the entity definitions on OBP up to date with the spreadsheet in place, without deleting anything, so records and users' Role grants (and the emails a re-grant sends) stay. New entities are created and changed ones updated; a structural change (a field removed, retyped or made required) to an entity that has records is not made; a new optional field is added in place, and the message says to recreate or use a new space. Reports only, unless given `--yes`.
-- **`patch_record.py`** / **`.sh`**: Change fields of one stored record, leaving its other fields as they are, e.g. `./patch_record.sh activity a_05OFWI037022 country_id=DE`. Shows the current and new values; sends the PATCH only with `--yes`.
-- **`query_indexes.py`** / **`.sh`**: Which fields to index is decided by how the data is queried, not by the data model: every field a Dynamic Query declaration (`*_query.json`) filters on, returns (`select`: callers may filter and sort on it with `obp_filter` / `obp_sort_by`), links a join on, or sorts a join by (`pick` / `order`) is declared `"indexed": true`, on top of the baseline in `obp_dynamic_api.should_index_field` (references, `<entity>_id`, `ALWAYS_INDEX_FIELD_NAMES`). The spreadsheet's "Field Is Indexed" column is not read. `./query_indexes.sh` lists each field and the query that needs it; `./update_dynamic_entities.sh` applies new indexes in place (OBP builds them in the background).
-- **`role_groups.py`**: Reads that matrix (offline; used by the checker and `create_role_groups.py`).
-- **`dynamic_resource_docs.py`**, **`recreate_dynamic_resource_docs.sh`**: Manage the Dynamic Resource Docs (e.g. the public registry endpoint, `registry_activities_endpoint.scala`). The `.sh` compiles, deletes, recreates and checks each doc (step 6 of `recreate_dynamic_entities.sh`); `--dry-run` only compiles them and lists what is on OBP.
-- **`dry_run_recreate_dynamic_entities.py`** / **`.sh`**: DRY RUN of `recreate_dynamic_entities.sh` — says what it would do, changes nothing.
-- **`create_space_bank.py`** / **`.sh`**: Create the `OBP_ENTITY_SPACE_ID` bank if it doesn't exist.
-- **`obp_space.py`**: The one place that builds dynamic-entity URLs and Role bank ids from `OBP_ENTITY_SPACE_ID`.
+**Scripts index**
+
+Run the `.sh` wrappers: each one changes to this directory, uses `.venv/bin/python` when it exists, and passes its arguments to the `.py` of the same name. Host, credentials and space come from `.env` (see Setup). "Writes" says whether a script changes anything on OBP.
+
+*The whole pipeline*
+
+| Script | What it does | Writes |
+|---|---|---|
+| `recreate_dynamic_entities.sh` | Deletes and recreates the entities from the spreadsheet, then example data, registry demo data, Role Groups, users and resource docs. Asks first; `--yes` skips, `--only` stops after the data. Logs to `logs/`. | yes |
+| `dry_run_recreate_dynamic_entities.sh` / `.py` | Says what `recreate_dynamic_entities.sh` would do. | no |
+| `update_dynamic_entities.sh` / `.py` | Brings the definitions on OBP up to date with the spreadsheet in place, keeping records and Role grants. Reports only, unless `--yes`. | with `--yes` |
+
+*Checks (all read-only)*
+
+| Script | What it checks |
+|---|---|
+| `check_min_field_matrix.sh` / `.py` | The spreadsheet, offline, before anything is created. |
+| `check_login_and_roles.sh` / `.py` | DirectLogin works and the user holds the Roles the scripts need. |
+| `diff_entities.sh` / `.py` | How the entities on OBP differ from the spreadsheet. Exits 1 when they differ. |
+| `check_openapi_field_types.sh` / `.py` | Every field type in OBP's generated OpenAPI document against the spreadsheet. |
+| `query_indexes.sh` / `.py` | Offline: which fields the Dynamic Queries (`*_query.json`) need indexed, and why. |
+| `check_indexing.sh` / `.py` | That OBP actually uses the indexes: the prop `dynamic_entity.indexing.backend=auto`, each entity's index built, and each Dynamic Query served from them. `--wait SECONDS` retries indexes still being built. Exits 1 on any problem. See "Indexes". |
+
+*Entities*
+
+| Script | What it does | Writes |
+|---|---|---|
+| `create_space_bank.sh` / `.py` | Creates the `OBP_ENTITY_SPACE_ID` bank if it doesn't exist. | yes |
+| `parse_minimum_fields.py` | Parses the spreadsheet; `--save` writes `entities_output.txt`, `--create` creates the entities. | with `--create` |
+| `delete_dynamic_entities.py` | Deletes only the entities listed in `entities_output.txt`, with their records. | yes |
+| `delete_all_dynamic_entities.py` | Deletes every dynamic entity in the space, OGCR or not. | yes |
+| `patch_record.sh` / `.py` | Changes fields of one stored record. Sends the PATCH only with `--yes`. | with `--yes` |
+
+*Data*
+
+| Script | What it does | Writes |
+|---|---|---|
+| `create_example_data.py` | One example record per entity from the spreadsheet's examples, plus the fixed lists in `fixtures.py`. See "Create example data". | yes |
+| `create_registry_demo_data.sh` / `.py` | Operators, activities, verifications and certificates for the registry. `--activities N` (default 10) generates activities 11 to N. Rows already present are skipped. | yes |
+
+*Roles, groups and users*
+
+| Script | What it does | Writes |
+|---|---|---|
+| `create_entitlements.sh` / `.py` | Grants the logged-in user the Roles the scripts need. | yes |
+| `create_role_groups.sh` / `.py` | Creates or updates the Groups in the spreadsheet's Role Group matrix. | yes |
+| `add_users_to_groups.sh` / `.py` | Adds users to the groups, as ticked in `DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx`. | yes |
+| `sync_user_group_permissions.sh` / `.py` | Brings one user's group memberships and Roles up to date. | yes |
+| `show_user_dynamic_entity_roles.sh` / `.py`, `show_user_dynamic_entity_paths.sh` / `.py` | Show one user's dynamic entity Roles, or the paths they can call. | no |
+| `grant_user_dynamic_entity_roles.sh` / `.py` | Grants one user dynamic entity Roles. | yes |
+
+*Dynamic Resource Docs*
+
+| Script | What it does | Writes |
+|---|---|---|
+| `recreate_dynamic_resource_docs.sh` | Compiles, deletes, recreates and checks each doc (step 6 of the recreate). `--dry-run` only compiles. | yes |
+| `dynamic_resource_docs.py` | The docs (`registry_activities_endpoint.scala`, `registry_activities_query.json`) and the commands the `.sh` uses. | yes |
+
+*Modules used by the scripts (not run directly)*
+
+| Module | What it holds |
+|---|---|
+| `obp_client.py` | DirectLogin, the host and the shared HTTP session. |
+| `obp_space.py` | Builds every dynamic entity URL and Role bank id from `OBP_ENTITY_SPACE_ID`. |
+| `obp_dynamic_api.py` | Builds entity definitions from the parsed spreadsheet and creates or updates them; decides which fields are indexed. |
+| `get_and_delete_dynamic_entities.py` | Lists and deletes entities and records in the space. |
+| `role_groups.py` | Reads the spreadsheet's Role Group matrix. |
+| `fixtures.py`, `iso_3166_1_countries.py`, `sustainable_development_goals.py` | The fixed lists: countries, technologies/practices/processes and SDGs. |
+| `example_data_creation_log_helpers.py` | The optional audit log entity for `create_example_data.py --log`. |
+| `timing.py` | The `⏱` step timings. |
 
 **Where the entities live (`OBP_ENTITY_SPACE_ID`)**
 
@@ -44,7 +94,7 @@ All OGCR entities live in one place: either at system level, or under one bank (
 | empty | `/obp/<v>/management/system-dynamic-entities` | `/obp/dynamic-entity/[public/]<entity>` | `SYS` |
 | `ogcr` (default) | `/obp/<v>/management/banks/ogcr/dynamic-entities` | `/obp/dynamic-entity/banks/ogcr/[public/]<entity>` | `ogcr` |
 
-Every script (create, update, delete, example data, Roles, join indexes, audit log) builds its URLs from `obp_space.py`, so they always agree, and deleting only ever touches entities in the configured space. This replaces the old `OBP_ENTITY_PREFIX`, which has been removed.
+Every script (create, update, delete, example data, Roles, index checks, audit log) builds its URLs from `obp_space.py`, so they always agree, and deleting only ever touches entities in the configured space. This replaces the old `OBP_ENTITY_PREFIX`, which has been removed.
 
 The bank must exist before entities can be created in it. `recreate_dynamic_entities.sh` creates it if it's missing, or run it on its own:
 
@@ -87,7 +137,7 @@ python3 parse_minimum_fields.py [path/to/min_field_matrix.xlsx] --update
   - **`--host`**: OBP host/base URL to use (overrides `OBP_HOSTNAME`).
   - **`--yes`**: When used with `--create`, skip interactive confirmation prompt.
 
-> **Note:** `--create` only *creates* — it does not delete existing entities or objects first. To do a clean wipe-and-recreate, use `main.py` (which deletes objects and entity definitions before recreating), but note that `main.py` rebuilds from the hardcoded entities in `dynamic_entities.py`, **not** from a spreadsheet.
+> **Note:** `--create` only *creates* — it does not delete existing entities or objects first. For a clean wipe-and-recreate, use `recreate_dynamic_entities.sh` (below).
 
 Notes about parsing behavior:
 - Column A is used for field names and `entity:` rows start new entities.
@@ -142,7 +192,7 @@ To see what takes a while: each step prints `⏱ <step>: <seconds>`, and a table
 
 Each run also writes a complete log to `logs/recreate_dynamic_entities_<date>-<time>.log`: everything printed on the console (errors included), plus every timing, including the ones under 1s that the console leaves out. It starts with a header giving the host, space, sheet, git commit and options, so it can be handed as-is to someone, or an agent, looking into the dynamic entities. The path is printed at the start and end of the run. `logs/` is git-ignored, because step 5 can write real usernames into it.
 
-A clean wipe-and-recreate driven entirely by the spreadsheet (this is what `main.py` does *not* do — `main.py` is tied to the hardcoded list in `dynamic_entities.py`):
+The steps `recreate_dynamic_entities.sh` runs, if you need to do them by hand:
 
 1. **Parse and save** the entity list to `entities_output.txt`:
 
@@ -289,7 +339,14 @@ How it works:
 
 Notes:
 - It creates **one record per entity**. To create more (e.g. several parcels under one activity), extend the payload loop in `main()`.
-- It is fully spreadsheet-driven — it does **not** use the hardcoded entities in `dynamic_entities.py`.
+
+**Indexes**
+
+Which fields are indexed is decided by the Dynamic Queries, not the spreadsheet: `query_indexes.py` lists them, `parse_minimum_fields.py --create` and `update_dynamic_entities.sh` declare them `"indexed": true`.
+
+Declaring an index only asks OBP for it. OBP uses it only when its props have `dynamic_entity.indexing.backend=auto` and its `db.url` is Postgres; otherwise every read is filtered in memory and join queries (`obp_exists` / `obp_not_exists`) are refused with OBP-09022. OBP builds each index in the background after a definition is saved; until it is built, a filter or sort on the field answers 409 OBP-09019, and a Dynamic Query reads every record instead. Definitions saved before the prop was switched on are never built: re-save them with `./update_dynamic_entities.sh --yes`.
+
+`./check_indexing.sh` checks all of this against the space in `.env`, and exits 1 when any index isn't used.
 
 **Public read access (`EntityHasPublicAccess`)**
 
@@ -338,15 +395,6 @@ python3 create_example_data.py --fixtures-only     # writes only the fixtured en
 
 To add a value, add it to the list in `fixtures.py`. To fixture another entity, add an `entity_name: [rows]` pair to `FIXTURES`, where a row is either a bare id (label derived), an explicit `(id, label)` pair, or an `(id, label, {field: value})` triple for extra fields.
 
-**`main.py` — Usage**
-- Run the management workflow (delete objects, delete entity definitions, recreate entities):
-
-```bash
-python3 main.py
-```
-
-- `main.py` uses credentials and host configured in environment (via `obp_client.py`). It does not accept CLI args; set the environment first.
-
 **Tips & Validation**
 - The parser attempts to coerce example values to appropriate types (integer, number, boolean, array/object via JSON) before sending to OBP so the `example` field matches OBP validation expectations.
 - If you run with `--create` and receive a 400 validation error, inspect the printed parsed entities to find which property's `example` is mismatched.
@@ -368,17 +416,11 @@ python3 parse_minimum_fields.py --create --yes
 
 5. Grant and check the Roles: `./create_entitlements.sh` then `./check_login_and_roles.sh`.
 
-6. Use `main.py` to clean and recreate system entities defined in `dynamic_entities.py`:
-
-```bash
-python3 main.py
-```
+6. Check OBP uses the indexes: `./check_indexing.sh`.
 
 **Where to look for issues**
 - Parsed entities printed by `parse_minimum_fields.py` show the exact `value` and `example` used to build the dynamic entity schema.
 - If a field example must be a number, ensure column H contains an unquoted numeric value (the parser will coerce when possible).
-
-If you want me to add example `.env` content, a quick test script, or adjust any parsing detail, tell me which part to update next.
 
 **Funding**
 

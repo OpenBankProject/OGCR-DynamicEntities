@@ -30,7 +30,7 @@ from obp_client import obp_host, session, token
 from obp_dynamic_api import BUILTIN_REFERENCE_TYPES, build_entity_definition_from_parsed
 from obp_space import SPACE_ID
 from example_data_creation_log_helpers import LOG_ENTITY_NAME
-from parse_minimum_fields import parse_xlsx_entities
+from parse_minimum_fields import CHAIN_CACHE_ENTITIES, parse_xlsx_entities
 
 DEFAULT_SPREADSHEET = "min_field_matrix.xlsx"
 SYSTEM_BANK_IDS = ("SYS", "")
@@ -156,7 +156,8 @@ def main():
 			matching += 1
 
 	only_sheet = [n for n in sheet if n not in on_obp]
-	only_obp = sorted(n for n in on_obp if n not in sheet and n != LOG_ENTITY_NAME)
+	only_obp = sorted(n for n in on_obp if n not in sheet and n != LOG_ENTITY_NAME
+		and n not in CHAIN_CACHE_ENTITIES)
 	if only_sheet:
 		print(f"\n+ In the sheet, not on OBP ({len(only_sheet)}): {', '.join(only_sheet)}")
 	if only_obp:

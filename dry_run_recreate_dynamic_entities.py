@@ -28,7 +28,7 @@ from get_and_delete_dynamic_entities import get_all_system_dynamic_entities
 from obp_client import token, obp_host, session
 from obp_space import ROLE_BANK_ID, SPACE_ID, describe
 from example_data_creation_log_helpers import LOG_ENTITY_NAME
-from parse_minimum_fields import parse_xlsx_entities
+from parse_minimum_fields import CHAIN_CACHE_ENTITIES, parse_xlsx_entities
 
 DEFAULT_SPREADSHEET = "min_field_matrix.xlsx"
 META_ROLE_NAMES = [
@@ -122,7 +122,7 @@ def main():
 		say(f"= {len(to_delete)} entities, {total_records} records")
 	else:
 		say("Nothing to delete: none of the sheet's entities exist there")
-	others = sorted(n for n in existing if n not in entities and n != LOG_ENTITY_NAME)
+	others = sorted(n for n in existing if n not in entities and n != LOG_ENTITY_NAME and n not in CHAIN_CACHE_ENTITIES)
 	if others:
 		say(f"Left untouched (not in the sheet): {', '.join(others)}")
 

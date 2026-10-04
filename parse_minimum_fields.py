@@ -15,6 +15,18 @@ import os
 import datetime
 from timing import print_slowest, timed
 
+# The entities OGCR-chain-cache defines (its entities/*.json) and fills from the chain. It is
+# the source of truth for chain data, so the sheet's rows for these are ignored, and these
+# scripts never create, update, delete or report on them.
+CHAIN_CACHE_ENTITIES = {
+	"parcel_on_chain",
+	"activity_on_chain",
+	"certification_on_chain",
+	"carbon_credit_batch_on_chain",
+	"carbon_credit_balance_on_chain",
+	"chain_sync_status",
+}
+
 
 def _has_green_checkmark(cell_value):
 	"""
@@ -223,7 +235,10 @@ def parse_xlsx_entities(file_path):
 				"fields": current_dict,
 			}
 
-		return entities
+		ignored = sorted(n for n in entities if n in CHAIN_CACHE_ENTITIES)
+		if ignored:
+			print(f"Ignoring {', '.join(ignored)} in the sheet: OGCR-chain-cache defines them", file=sys.stderr)
+		return {n: e for n, e in entities.items() if n not in CHAIN_CACHE_ENTITIES}
 
 	except FileNotFoundError:
 		print(f"Error: File '{file_path}' not found.")

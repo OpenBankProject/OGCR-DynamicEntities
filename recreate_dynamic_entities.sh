@@ -10,7 +10,8 @@
 #      dynamic entities on the instance are left untouched.
 #   2. Create the entities defined in min_field_matrix.xlsx.
 #   3. Create example objects for those entities, then the registry's
-#      demo records (create_registry_demo_data.sh).
+#      demo records (create_registry_demo_data.sh), then check OBP uses the
+#      indexes (check_indexing.sh).
 #   4. Create/update the Role Groups from the sheet's matrix (create_role_groups.sh).
 #   5. Add users to those groups from DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx (add_users_to_groups.sh),
 #      if that file exists.
@@ -194,6 +195,9 @@ timed_step "Step 3: example data" "$PYTHON" create_example_data.py "$MATRIX"
 # Report a failure but still finish the run.
 REGISTRY_FAILED=false
 timed_step "Step 3: registry data" ./create_registry_demo_data.sh "$MATRIX" || REGISTRY_FAILED=true
+# OBP builds an entity's indexes while saving it in step 2, so they are built or failed by now.
+INDEXING_FAILED=false
+timed_step "Step 3: index check" ./check_indexing.sh || INDEXING_FAILED=true
 
 if [ "$ONLY_ENTITIES" = true ]; then
   echo
@@ -201,6 +205,11 @@ if [ "$ONLY_ENTITIES" = true ]; then
   echo "Role Groups, users and resource docs skipped (--only)."
   if [ "$REGISTRY_FAILED" = true ]; then
     echo "✗ Some registry demo records were not created; see STEP 3 above." >&2
+  fi
+  if [ "$INDEXING_FAILED" = true ]; then
+    echo "✗ OBP is not using every index; see the index check in STEP 3 above." >&2
+  fi
+  if [ "$REGISTRY_FAILED" = true ] || [ "$INDEXING_FAILED" = true ]; then
     exit 1
   fi
   exit 0
@@ -238,12 +247,15 @@ echo "Done. Dynamic entities recreated and populated from ${MATRIX}, Role Groups
 if [ "$REGISTRY_FAILED" = true ]; then
   echo "✗ Some registry demo records were not created; see STEP 3 above." >&2
 fi
+if [ "$INDEXING_FAILED" = true ]; then
+  echo "✗ OBP is not using every index; see the index check in STEP 3 above." >&2
+fi
 if [ "$USERS_FAILED" = true ]; then
   echo "✗ Some users could not be added to their groups; see STEP 5 above." >&2
 fi
 if [ "$DOCS_FAILED" = true ]; then
   echo "✗ The Dynamic Resource Docs were not all recreated; see STEP 6 above." >&2
 fi
-if [ "$DOCS_FAILED" = true ] || [ "$USERS_FAILED" = true ] || [ "$REGISTRY_FAILED" = true ]; then
+if [ "$DOCS_FAILED" = true ] || [ "$USERS_FAILED" = true ] || [ "$REGISTRY_FAILED" = true ] || [ "$INDEXING_FAILED" = true ]; then
   exit 1
 fi

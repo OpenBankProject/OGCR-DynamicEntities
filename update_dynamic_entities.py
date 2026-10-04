@@ -25,8 +25,13 @@ alone.
 
 Without --yes nothing is changed: it only reports what it would do.
 
+--resave also saves unchanged entities again (all of them, or the ones named). Every
+save makes OBP build the entity's indexes, so this is how to get indexes built that
+check_indexing.sh reports as never built (e.g. definitions saved before the
+dynamic_entity.indexing.backend=auto prop was switched on). Records and grants stay.
+
 Usage:
-    python3 update_dynamic_entities.py [path/to/min_field_matrix.xlsx] [--yes]
+    python3 update_dynamic_entities.py [path/to/min_field_matrix.xlsx] [--yes] [--resave [ENTITY ...]]
 
 Exits 0 when the space matches the sheet (or will once --yes is applied), 1 when an
 entity needs a recreate, is only on OBP, or a change failed, 2 if the sheet or OBP
@@ -46,7 +51,7 @@ from obp_dynamic_api import (
 	update_system_dynamic_entity,
 )
 from obp_space import SPACE_ID, describe
-from parse_minimum_fields import parse_xlsx_entities
+from parse_minimum_fields import CHAIN_CACHE_ENTITIES, parse_xlsx_entities
 
 DEFAULT_SPREADSHEET = "min_field_matrix.xlsx"
 
@@ -74,6 +79,8 @@ def main():
 	parser.add_argument("file", nargs="?", default=DEFAULT_SPREADSHEET,
 		help=f"Path to the xlsx file (default: {DEFAULT_SPREADSHEET})")
 	parser.add_argument("--yes", action="store_true", help="Apply the creates and updates (default: report only)")
+	parser.add_argument("--resave", nargs="*", metavar="ENTITY",
+		help="Also save unchanged entities again, so OBP builds their indexes: all of them, or the ones named")
 	args = parser.parse_args()
 
 	sheet = parse_xlsx_entities(args.file)
@@ -120,7 +127,14 @@ def main():
 			to_update.append(name)
 			print(f"\n~ update {name}" + (f" ({records} record(s) kept)" if records else ""))
 			print("\n".join(lines))
-	only_obp = sorted(n for n in on_obp if n not in sheet and n != LOG_ENTITY_NAME)
+	only_obp = sorted(n for n in on_obp if n not in sheet and n != LOG_ENTITY_NAME
+		and n not in CHAIN_CACHE_ENTITIES)
+	to_resave = [] if args.resave is None else [n for n in unchanged if not args.resave or n in args.resave]
+	for name in args.resave or []:
+		if name not in sheet:
+			print(f"\n! --resave {name}: not in the sheet, ignored")
+	for name in to_resave:
+		print(f"\n= resave {name} (unchanged, saved again so OBP builds its indexes)")
 
 	for name in to_create:
 		print(f"\n+ create {name}")
@@ -136,14 +150,15 @@ def main():
 		print("  Deleting one deletes its records and its users' record Role grants.")
 
 	print(f"\n{len(unchanged)} unchanged, {len(to_update)} to update, {len(to_create)} to create, "
-		f"{len(to_recreate)} needing a recreate, {len(only_obp)} only on OBP")
+		f"{len(to_recreate)} needing a recreate, {len(only_obp)} only on OBP"
+		+ (f", {len(to_resave)} to resave" if to_resave else ""))
 
 	failed = 0
 	updated = []
 	if not args.yes:
-		if to_create or to_update:
+		if to_create or to_update or to_resave:
 			print("Nothing was changed. Run with --yes to apply the creates and updates.")
-	elif not (to_create or to_update):
+	elif not (to_create or to_update or to_resave):
 		print("\nNothing to apply: every entity that can be changed in place already matches the sheet.")
 	else:
 		print(f"\nApplying to {obp_host}, {describe()}:")
@@ -163,7 +178,7 @@ def main():
 				failed += 1
 				print(f"✗ create {name} failed: {e}")
 		on_obp = get_entities_on_obp(bank_id)
-		for name in to_update + sorted(created):
+		for name in to_update + to_resave + sorted(created):
 			if name not in on_obp:
 				continue
 			# A new entity is updated only to restore references it was created without.
@@ -172,7 +187,7 @@ def main():
 			try:
 				update_system_dynamic_entity(on_obp[name]["dynamic_entity_id"], build(name), token=token, base_url=obp_host)
 				updated.append(name)
-				print(f"✓ updated {name}")
+				print(f"✓ {'resaved' if name in to_resave else 'updated'} {name}")
 			except Exception as e:
 				failed += 1
 				print(f"✗ update {name} failed: {e}")

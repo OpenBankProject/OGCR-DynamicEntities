@@ -7,16 +7,18 @@ only asks OBP for an index. OBP serves filters, sorts and joins from it only whe
     (or SQL Server). Otherwise every read is filtered in memory, and obp_exists /
     obp_not_exists joins are refused with OBP-09022;
   * the index (OBP calls it the projection) has been built for that entity in this space.
-    Until then a filter or sort on the field answers 409 OBP-09019, and a Dynamic Query
-    quietly reads every record instead. Definitions saved before the prop was switched
-    on are never built: re-save them (./update_dynamic_entities.sh --yes, or recreate).
+    OBP builds it while saving the definition; if that fails, the definition is still
+    saved, a filter or sort on the field answers 409 OBP-09019 ("still being built"),
+    and a Dynamic Query quietly reads every record instead. Definitions saved before the prop was switched
+    on are never built: save them again (./update_dynamic_entities.sh --yes --resave).
 
 Read-only. Three checks, all against the space in OBP_ENTITY_SPACE_ID:
 
   1. Props: each reverse join with a `where` in a *_query.json is run as an obp_exists
      query. 400 OBP-09022 means the prop is off (or the database isn't supported).
   2. Built: each entity the queries read is sorted on a field they index (its
-     `<entity>_id` when it has one); 409 means its index isn't built. With --wait, retried until built or the time is up.
+     `<entity>_id` when it has one); 409 means its index isn't built. With --wait, retried until built or the time is up (rarely
+     useful: the save builds the index, so a 409 afterwards means the build failed).
   3. Used: OBP's explain endpoint says how each *_query.json is answered; any page read or
      reverse join not served by the index is reported with OBP's reason. Needs the Role
      CanCreateDynamicResourceDoc; skipped with a warning without it.
@@ -43,9 +45,10 @@ EXPLAIN_URL = "/obp/v7.0.0/management/dynamic-resource-docs/explain"
 PROP_OFF = "OBP-09022"
 NOT_BUILT = "OBP-09019"
 PROP_HELP = ("Set dynamic_entity.indexing.backend=auto in OBP's props (db.url must be Postgres), "
-             "restart OBP, then re-save the definitions: ./update_dynamic_entities.sh --yes")
-BUILD_HELP = ("If this persists, re-save the definitions so OBP builds the indexes: "
-              "./update_dynamic_entities.sh --yes")
+             "restart OBP, then save the definitions again: ./update_dynamic_entities.sh --yes --resave")
+BUILD_HELP = ("If this persists, save the definitions again so OBP builds the indexes: "
+              "./update_dynamic_entities.sh --yes --resave. If they are still not built, OBP's log "
+              "says why: look for \"DE projection provisioning failed\".")
 
 
 def headers():

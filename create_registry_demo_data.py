@@ -10,13 +10,21 @@ chosen so every case the endpoint renders appears at least once:
   * one activity with two certificates, so "latest by issue_date" is exercised
   * several countries, operators and activity types
 
+Each activity gets two parcels a few km outside its city (parcel_<n>A and
+parcel_<n>B, linked by parcel_activity), and the activity's
+multipolygon_coordinates is those two parcels, so every map shows land in the
+right place. Its verification points at its own first parcel.
+
 Required fields this script does not set keep their spreadsheet example, the
 same as `create_example_data.py`. Optional fields are only sent when set here.
-References to parcel, certification_scheme and certification_body use the
-first existing row, so run `create_example_data.py` first.
+References to certification_scheme and certification_body use the first
+existing row, so run `create_example_data.py` first.
 
-Rows already present are skipped (operators, activities and certificates by id;
-verifications by activity_id + status_code), so it is safe to re-run.
+Rows already present are skipped (operators, activities, parcels and
+certificates by id; parcel_activity by parcel_id + activity_id; verifications by
+activity_id + status_code), so it is safe to re-run. A stored activity with no
+multipolygon_coordinates, or a stored verification pointing at a parcel that is
+not one of its activity's, is PATCHed to match.
 
 Usage:
     python3 create_registry_demo_data.py [path/to/min_field_matrix.xlsx] [--token TOKEN] [--activities N]
@@ -27,12 +35,13 @@ out below, with verifications and certificates in a repeating pattern.
 
 import argparse
 import logging
+import math
 import sys
 
 import requests
 
 from obp_client import token as default_token, obp_host, session
-from obp_space import record_path
+from obp_space import SPACE_ID, record_path
 from parse_minimum_fields import parse_xlsx_entities
 from create_example_data import clean_key, coerce_value, create_object, DEFAULT_SPREADSHEET
 
@@ -148,6 +157,62 @@ PRACTICES = [
     ("Hemp Insulation", PRODUCTS),
 ]
 
+# (longitude, latitude) of every city above, WGS84, for the activity and parcel geometry.
+CITY_LON_LAT = {
+    "Seelow": (14.38, 52.53), "Viborg": (9.40, 56.45), "Angers": (-0.55, 47.47),
+    "Hellisheidi": (-21.40, 64.04), "Landshut": (12.15, 48.54), "Siena": (11.33, 43.32),
+    "Tampere": (23.76, 61.50), "Arnhem": (5.90, 51.98), "Valladolid": (-4.72, 41.65),
+    "Poznan": (16.93, 52.41), "Leipzig": (12.37, 51.34), "Rennes": (-1.68, 48.11),
+    "Zwolle": (6.09, 52.51), "Aarhus": (10.20, 56.16), "Bologna": (11.34, 44.49),
+    "Zaragoza": (-0.89, 41.65), "Lublin": (22.57, 51.25), "Oulu": (25.47, 65.01),
+    "Uppsala": (17.64, 59.86), "Graz": (15.44, 47.07), "Galway": (-9.05, 53.27),
+    "Evora": (-7.91, 38.57), "Ghent": (3.72, 51.05), "Brno": (16.61, 49.20),
+    "Tartu": (26.72, 58.38), "Akureyri": (-18.09, 65.68),
+}
+
+CRS = "EPSG:4326"
+PARCEL_WIDTH_M, PARCEL_HEIGHT_M = 600, 400
+METRES_PER_DEGREE_LAT = 111_320
+
+
+def parcel_rings(activity_id, city):
+    """Two adjoining rectangular parcel rings for an activity, as GeoJSON polygons.
+
+    They sit about 5 km north of the city, so they fall on land outside it, and
+    each activity number is moved a further 1.5 km east so generated activities
+    in the same city do not overlap. Rings run counter-clockwise (RFC 7946) and
+    the longitude span is scaled by latitude so the parcels are not squashed.
+    """
+    n = int(activity_id[len("a_REG"):])
+    lon, lat = CITY_LON_LAT[city]
+    lat += 5000 / METRES_PER_DEGREE_LAT
+    metres_per_degree_lon = METRES_PER_DEGREE_LAT * math.cos(math.radians(lat))
+    lon += (n // len(PLACES)) * 1500 / metres_per_degree_lon
+    width = PARCEL_WIDTH_M / metres_per_degree_lon
+    height = PARCEL_HEIGHT_M / METRES_PER_DEGREE_LAT
+    rings = []
+    for i in range(2):
+        west, south = lon + i * width, lat
+        east, north = west + width, south + height
+        rings.append([[[round(x, 6), round(y, 6)] for x, y in
+                       [(west, south), (east, south), (east, north), (west, north), (west, south)]]])
+    return rings
+
+
+def parcels_for(activity):
+    """The two parcel rows of an activity, and the activity's MultiPolygon (their union)."""
+    suffix = activity["activity_id"][len("a_"):]
+    rings = parcel_rings(activity["activity_id"], activity["city"])
+    parcels = [
+        {
+            "parcel_id": f"parcel_{suffix}{letter}",
+            "multipolygon_coordinates": {"type": "MultiPolygon", "coordinates": [ring]},
+            "coordinate_reference_system": CRS,
+        }
+        for letter, ring in zip("AB", rings)
+    ]
+    return parcels, {"type": "MultiPolygon", "coordinates": rings}
+
 
 def generated(total):
     """Activities 11..`total`, with their verifications and certificates.
@@ -203,6 +268,13 @@ def list_rows(entity_name, token):
     return [r for r in response.json().get(f"{entity_name}_list", []) if isinstance(r, dict)]
 
 
+def patch_record(entity_name, record_id, values, token):
+    """PATCH only `values` onto a stored record (v7.0.0, as patch_record.py does)."""
+    url = f"{obp_host}/obp/v7.0.0/banks/{SPACE_ID or 'SYS'}/dynamic-entities/{entity_name}/{record_id}"
+    response = session.patch(url, headers=headers(token), json=values, timeout=60)
+    response.raise_for_status()
+
+
 def first_id(entity_name, token):
     """Id of the first stored row, for references this script does not vary."""
     ids = sorted(r[f"{entity_name}_id"] for r in list_rows(entity_name, token) if r.get(f"{entity_name}_id"))
@@ -248,7 +320,7 @@ def main():
     certificates = CERTIFICATES + extra_certificates
 
     entities = parse_xlsx_entities(args.file)
-    needed = ["operator", "activity", "activity_verification", "certificate_of_compliance"]
+    needed = ["operator", "parcel", "activity", "parcel_activity", "activity_verification", "certificate_of_compliance"]
     missing = [n for n in needed if n not in entities]
     if missing:
         logger.error(f"Not in {args.file}: {', '.join(missing)}")
@@ -260,28 +332,56 @@ def main():
         logger.error(f"Countries not stored: {', '.join(sorted(used - countries))}; run create_example_data.py first")
         sys.exit(1)
 
-    parcel_id = first_id("parcel", args.token)
     scheme_id = first_id("certification_scheme", args.token)
     body_id = first_id("certification_body", args.token)
     activity_country = {a["activity_id"]: a["country_id"] for a in activities}
+    activity_parcels, activity_geometry = {}, {}
+    for a in activities:
+        activity_parcels[a["activity_id"]], activity_geometry[a["activity_id"]] = parcels_for(a)
 
     stored_operators = {r.get("operator_id") for r in list_rows("operator", args.token)}
-    stored_activities = {r.get("activity_id") for r in list_rows("activity", args.token)}
+    stored_parcels = {r.get("parcel_id") for r in list_rows("parcel", args.token)}
+    stored_activities = {r.get("activity_id"): r for r in list_rows("activity", args.token)}
+    stored_links = {(r.get("parcel_id"), r.get("activity_id")) for r in list_rows("parcel_activity", args.token)}
     stored_certificates = {r.get("certificate_of_compliance_id") for r in list_rows("certificate_of_compliance", args.token)}
-    stored_verifications = {(r.get("activity_id"), r.get("status_code")) for r in list_rows("activity_verification", args.token)}
+    stored_verification_rows = list_rows("activity_verification", args.token)
+    stored_verifications = {(r.get("activity_id"), r.get("status_code")) for r in stored_verification_rows}
 
     # (entity, key, already stored?, values), parents first so references resolve.
     plan = []
     for o in OPERATORS:
         plan.append(("operator", o["operator_id"], o["operator_id"] in stored_operators, o))
     for a in activities:
+        for p in activity_parcels[a["activity_id"]]:
+            plan.append(("parcel", p["parcel_id"], p["parcel_id"] in stored_parcels, p))
+    for a in activities:
         values = {k: v for k, v in a.items() if v != ""}
+        values["multipolygon_coordinates"] = activity_geometry[a["activity_id"]]
         plan.append(("activity", a["activity_id"], a["activity_id"] in stored_activities, values))
+    for a in activities:
+        for p in activity_parcels[a["activity_id"]]:
+            link = (p["parcel_id"], a["activity_id"])
+            plan.append((
+                "parcel_activity", "/".join(link), link in stored_links,
+                {"parcel_id": p["parcel_id"], "activity_id": a["activity_id"]},
+            ))
     for activity_id, status in verifications:
         plan.append((
             "activity_verification", f"{activity_id}/{status}", (activity_id, status) in stored_verifications,
-            {"activity_id": activity_id, "parcel_id": parcel_id, "status_code": status, "status_message": ""},
+            {"activity_id": activity_id, "parcel_id": activity_parcels[activity_id][0]["parcel_id"],
+             "status_code": status, "status_message": ""},
         ))
+
+    # Rows stored by an earlier run without geometry, or with the shared example parcel:
+    # (entity, record id, values to PATCH). Run after the plan, so the parcels exist.
+    patches = []
+    for activity_id, row in stored_activities.items():
+        if activity_id in activity_geometry and not row.get("multipolygon_coordinates"):
+            patches.append(("activity", activity_id, {"multipolygon_coordinates": activity_geometry[activity_id]}))
+    for row in stored_verification_rows:
+        own = [p["parcel_id"] for p in activity_parcels.get(row.get("activity_id"), [])]
+        if own and row.get("parcel_id") not in own:
+            patches.append(("activity_verification", row["activity_verification_id"], {"parcel_id": own[0]}))
     for cert_id, activity_id, issued, expires, status in certificates:
         plan.append((
             "certificate_of_compliance", cert_id, cert_id in stored_certificates,
@@ -311,7 +411,18 @@ def main():
             logger.error(f"  ✗ Failed {entity_name} {key}: {detail}")
             failed += 1
 
-    logger.info(f"Registry Demo Data Summary: {created} created, {skipped} already present, {failed} failed")
+    patched = 0
+    for entity_name, record_id, values in patches:
+        try:
+            patch_record(entity_name, record_id, values, args.token)
+            logger.info(f"  ✓ Patched {entity_name} {record_id}: {', '.join(values)}")
+            patched += 1
+        except requests.exceptions.HTTPError as e:
+            detail = e.response.text if e.response is not None else str(e)
+            logger.error(f"  ✗ Failed to patch {entity_name} {record_id}: {detail}")
+            failed += 1
+
+    logger.info(f"Registry Demo Data Summary: {created} created, {patched} patched, {skipped} already present, {failed} failed")
     sys.exit(1 if failed else 0)
 
 

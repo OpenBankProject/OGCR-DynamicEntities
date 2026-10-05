@@ -13,7 +13,7 @@
 #
 # Notes:
 #   - Run create_example_data.py (or recreate_dynamic_entities.sh) first: the new
-#     activities reference the first existing parcel, certification scheme and
+#     activities reference the first existing certification scheme and
 #     certification body.
 #   - Rows already present are skipped, so it is safe to re-run.
 #   - Credentials/host come from your .env, same as the Python scripts.

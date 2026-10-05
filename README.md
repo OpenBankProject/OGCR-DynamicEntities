@@ -36,6 +36,7 @@ Run the `.sh` wrappers: each one changes to this directory, uses `.venv/bin/pyth
 | `check_openapi_field_types.sh` / `.py` | Every field type in OBP's generated OpenAPI document against the spreadsheet. |
 | `query_indexes.sh` / `.py` | Offline: which fields the Dynamic Queries (`*_query.json`) need indexed, and why. |
 | `check_indexing.sh` / `.py` | That OBP actually uses the indexes: the prop `dynamic_entity.indexing.backend=auto`, each entity's index built, and each Dynamic Query served from them. Exits 1 on any problem. See "Indexes". |
+| `time_registry_query.sh` / `.py` | Calls `/registry/activities-query` anonymously `--runs` times (default 5) and logs each call's ms and number of records, plus min/median/max, to the console and `logs/time_registry_query.log`. |
 
 *Entities*
 
@@ -52,7 +53,7 @@ Run the `.sh` wrappers: each one changes to this directory, uses `.venv/bin/pyth
 | Script | What it does | Writes |
 |---|---|---|
 | `create_example_data.py` | One example record per entity from the spreadsheet's examples, plus the fixed lists in `fixtures.py`. See "Create example data". | yes |
-| `create_registry_demo_data.sh` / `.py` | Operators, activities, verifications and certificates for the registry. `--activities N` (default 10) generates activities 11 to N. Rows already present are skipped. | yes |
+| `create_registry_demo_data.sh` / `.py` | Operators, activities, verifications and certificates for the registry, with two parcels per activity (near its city) and the activity's `multipolygon_coordinates` covering them. `--activities N` (default 10) generates activities 11 to N. Rows already present are skipped; stored activities with no geometry, and verifications on another activity's parcel, are patched. | yes |
 
 *Roles, groups and users*
 

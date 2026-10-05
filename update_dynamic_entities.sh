@@ -6,10 +6,12 @@
 # in place, by running update_dynamic_entities.py. Unlike recreate_dynamic_entities.sh
 # it deletes nothing, so records and users' Role grants (and their emails) stay.
 # Changes OBP can't make in place are reported, with what to do instead.
+# Then it creates or updates the Dynamic Resource Docs (dynamic_resource_docs.py: the
+# registry endpoint and the Dynamic Queries) that are missing or differ; --no-docs skips that.
 # All arguments are passed through.
 #
 # Usage:
-#   ./update_dynamic_entities.sh [path/to/min_field_matrix.xlsx] [--yes]
+#   ./update_dynamic_entities.sh [path/to/min_field_matrix.xlsx] [--yes] [--resave [ENTITY ...]] [--no-docs]
 #
 # Without --yes it only reports what it would do.
 

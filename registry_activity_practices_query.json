@@ -1,0 +1,12 @@
+{
+  "from": "activity_technologies_practices_processes",
+  "select": ["activity_id", "technologies_practices_processes_id"],
+  "join": [
+    {
+      "entity": "technologies_practices_processes",
+      "on": "technologies_practices_processes_id",
+      "fields": { "practice_name": "practice_name" }
+    }
+  ],
+  "envelope": { "rows": "practices", "count": "count" }
+}

@@ -1,0 +1,28 @@
+{
+  "from": "certificate_of_compliance",
+  "select": [
+    "certificate_of_compliance_id",
+    "activity_id",
+    "certification_status",
+    "issue_date",
+    "expiry_date",
+    "certification_scheme_id",
+    "certification_body_id"
+  ],
+  "join": [
+    {
+      "entity": "certification_scheme",
+      "on": "certification_scheme_id",
+      "fields": {
+        "certification_scheme_name": "name",
+        "certification_scheme_version": "scheme_version_number"
+      }
+    },
+    {
+      "entity": "certification_body",
+      "on": "certification_body_id",
+      "fields": { "certification_body_legal_name": "legal_name" }
+    }
+  ],
+  "envelope": { "rows": "certificates", "count": "count" }
+}

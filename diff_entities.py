@@ -31,6 +31,7 @@ from obp_dynamic_api import BUILTIN_REFERENCE_TYPES, build_entity_definition_fro
 from obp_space import SPACE_ID
 from example_data_creation_log_helpers import LOG_ENTITY_NAME
 from parse_minimum_fields import CHAIN_CACHE_ENTITIES, parse_xlsx_entities
+from query_indexes import QUERY_INDEX_SOURCES
 
 DEFAULT_SPREADSHEET = "min_field_matrix.xlsx"
 SYSTEM_BANK_IDS = ("SYS", "")
@@ -62,6 +63,14 @@ def get_entities_on_obp(bank_id):
 def show(value):
 	text = json.dumps(value, ensure_ascii=False)
 	return text if len(text) <= 80 else text[:77] + "..."
+
+
+def index_reason(name, field, want):
+	"""Why a field is (or is not) wanted indexed. The sheet has no say: obp_dynamic_api.should_index_field decides."""
+	if not want:
+		return "no Dynamic Query or baseline rule needs it"
+	files = QUERY_INDEX_SOURCES.get(name, {}).get(field)
+	return ", ".join(files) if files else "baseline: reference, own id or status_code"
 
 
 def diff_entity(name, expected, actual, structure_only):
@@ -100,7 +109,9 @@ def diff_entity(name, expected, actual, structure_only):
 			w, h = want.get(key), have.get(key)
 			if key in ("indexed", "hide_field_from_public_access"):
 				w, h = bool(w), bool(h)
-			if w != h:
+			if w != h and key == "indexed":
+				changes.append(f"indexed: OBP {show(h)}, wanted {show(w)} ({index_reason(name, field, w)})")
+			elif w != h:
 				changes.append(f"{key}: sheet {show(w)}, OBP {show(h)}")
 		if (field in want_required) != (field in have_required):
 			changes.append(f"required: sheet {field in want_required}, OBP {field in have_required}")

@@ -1,0 +1,86 @@
+{
+  "from": "activity",
+  "select": [
+    "activity_id",
+    "name",
+    "summary",
+    "description",
+    "website",
+    "hero_image",
+    "image",
+    "activity_type",
+    "unit_types",
+    "city",
+    "country_id",
+    "multipolygon_coordinates",
+    "start_date",
+    "end_date",
+    "term_commitment",
+    "cobenefits",
+    "methodologies",
+    "monitoring_period_start_date",
+    "monitoring_period_end_date",
+    "certification_scheme_id",
+    "operator_id"
+  ],
+  "join": [
+    {
+      "entity": "country",
+      "on": "country_id",
+      "fields": { "country_name": "country_name" }
+    },
+    {
+      "entity": "operator",
+      "on": "operator_id",
+      "fields": {
+        "operator_legal_name": "legal_name",
+        "operator_country_id": "country_id"
+      }
+    },
+    {
+      "entity": "certification_scheme",
+      "on": "certification_scheme_id",
+      "fields": {
+        "selected_certification_scheme_name": "name",
+        "selected_certification_scheme_version": "scheme_version_number"
+      }
+    },
+    {
+      "entity": "activity_verification",
+      "on": "activity_id",
+      "cardinality": "many",
+      "as": "verifications",
+      "fields": { "status_code": "status_code" }
+    },
+    {
+      "entity": "activity_media",
+      "on": "activity_id",
+      "cardinality": "many",
+      "as": "media",
+      "order": "latest_by:published_date",
+      "fields": {
+        "activity_media_id": "activity_media_id",
+        "title": "title",
+        "link": "link",
+        "activity_media_type": "activity_media_type",
+        "author": "author",
+        "published_date": "published_date",
+        "image": "image"
+      }
+    },
+    {
+      "entity": "activity_on_chain",
+      "on": "activity_id",
+      "cardinality": "at_most_one",
+      "pick": "latest_by:minted_at",
+      "fields": {
+        "minted_at": "minted_at",
+        "token_id": "token_id",
+        "contract_address": "contract_address",
+        "chain_id": "chain_id",
+        "tx_hash": "tx_hash"
+      }
+    }
+  ],
+  "envelope": { "rows": "activities", "count": "count" }
+}

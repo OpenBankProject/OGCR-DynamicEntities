@@ -1,0 +1,15 @@
+{
+  "from": "sustainable_development_goals",
+  "select": ["activity_id", "sustainable_development_goal_id"],
+  "join": [
+    {
+      "entity": "sustainable_development_goal",
+      "on": "sustainable_development_goal_id",
+      "fields": {
+        "sustainable_development_goal_name": "sustainable_development_goal_name",
+        "sustainable_development_goal_link": "sustainable_development_goal_link"
+      }
+    }
+  ],
+  "envelope": { "rows": "sdgs", "count": "count" }
+}

@@ -24,7 +24,7 @@ Run the `.sh` wrappers: each one changes to this directory, uses `.venv/bin/pyth
 |---|---|---|
 | `recreate_dynamic_entities.sh` | Deletes and recreates the entities from the spreadsheet, then example data, registry demo data, an index check, Role Groups, users and resource docs. Asks first; `--yes` skips, `--only` stops after the data. Logs to `logs/`. | yes |
 | `dry_run_recreate_dynamic_entities.sh` / `.py` | Says what `recreate_dynamic_entities.sh` would do. | no |
-| `update_dynamic_entities.sh` / `.py` | Brings the definitions on OBP up to date with the spreadsheet in place, keeping records and Role grants. Reports only, unless `--yes`. `--resave` also saves unchanged entities again, so OBP builds their indexes. | with `--yes` |
+| `update_dynamic_entities.sh` / `.py` | Brings the definitions on OBP up to date with the spreadsheet in place, keeping records and Role grants. Reports only, unless `--yes`. `--resave` also saves unchanged entities again, so OBP builds their indexes. Then creates or updates the Dynamic Resource Docs (`dynamic_resource_docs.py`) that are missing or differ; `--no-docs` skips them. | with `--yes` |
 
 *Checks (all read-only)*
 
@@ -347,7 +347,7 @@ Notes:
 
 **Indexes**
 
-Which fields are indexed is decided by the Dynamic Queries, not the spreadsheet: `query_indexes.py` lists them, `parse_minimum_fields.py --create` and `update_dynamic_entities.sh` declare them `"indexed": true`.
+Which fields are indexed is decided by the Dynamic Queries, not the spreadsheet: `query_indexes.py` lists them, `parse_minimum_fields.py --create` and `update_dynamic_entities.sh` declare them `"indexed": true`. A query's returned fields are indexed so callers can filter and sort on them, except for the activity detail page's queries (`LOOKUP_QUERIES` in `query_indexes.py`), which callers only filter by `activity_id`. In `update_dynamic_entities.sh` / `diff_entities.sh`, an `indexed` change names the query (or baseline rule) that wants it.
 
 Declaring an index only asks OBP for it. OBP uses it only when its props have `dynamic_entity.indexing.backend=auto` and its `db.url` is Postgres; otherwise every read is filtered in memory and join queries (`obp_exists` / `obp_not_exists`) are refused with OBP-09022. OBP builds an entity's indexes while it saves the definition; a field whose index isn't built answers 409 OBP-09019 to a filter or sort ("still being built", though after a save it means the build failed), and a Dynamic Query reads every record instead. Definitions saved before the prop was switched on are never built: save them again with `./update_dynamic_entities.sh --yes --resave` (all entities, or name them after `--resave`). Every save makes OBP build the indexes on the spot; if a build fails, OBP still saves the definition and logs "DE projection provisioning failed" with the reason.
 

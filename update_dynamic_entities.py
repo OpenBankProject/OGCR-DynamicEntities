@@ -23,6 +23,12 @@ says so, and what to do instead. An OBP older than this rule refuses new fields 
 with OBP-09023, which is reported as a failed update. Entities on OBP that the sheet no longer has are listed and left
 alone.
 
+Then it does the same for the Dynamic Resource Docs in dynamic_resource_docs.py (the
+registry endpoint and the Dynamic Queries): a doc not on OBP is created, one whose
+stored version differs (code/query, summary, roles, ...) is updated in place, after the
+entities, so the Queries find the indexes and public flags they need. --no-docs skips
+this. A doc on OBP that DOCS doesn't name is left alone.
+
 Without --yes nothing is changed: it only reports what it would do.
 
 --resave also saves unchanged entities again (all of them, or the ones named). Every
@@ -31,7 +37,7 @@ check_indexing.sh reports as never built (e.g. definitions saved before the
 dynamic_entity.indexing.backend=auto prop was switched on). Records and grants stay.
 
 Usage:
-    python3 update_dynamic_entities.py [path/to/min_field_matrix.xlsx] [--yes] [--resave [ENTITY ...]]
+    python3 update_dynamic_entities.py [path/to/min_field_matrix.xlsx] [--yes] [--resave [ENTITY ...]] [--no-docs]
 
 Exits 0 when the space matches the sheet (or will once --yes is applied), 1 when an
 entity needs a recreate, is only on OBP, or a change failed, 2 if the sheet or OBP
@@ -42,6 +48,7 @@ import argparse
 import sys
 
 from diff_entities import diff_entity, env_bool, get_entities_on_obp
+from dynamic_resource_docs import DOCS, cmd_create, cmd_update, doc_changes, find_existing
 from example_data_creation_log_helpers import LOG_ENTITY_NAME
 from obp_client import obp_host, token
 from obp_dynamic_api import (
@@ -74,6 +81,43 @@ def structural_changes(name, expected, actual):
 	return reasons
 
 
+def sync_docs(apply):
+	"""Create or update every Dynamic Resource Doc in DOCS that differs from OBP. Returns the failure count."""
+	to_create, to_update, unchanged = [], [], []
+	print(f"\nDynamic Resource Docs ({len(DOCS)} in dynamic_resource_docs.py):")
+	for name, doc in DOCS.items():
+		try:
+			existing = find_existing(doc, token, obp_host)
+		except Exception as e:
+			print(f"✗ {name}: could not read the docs on OBP: {e}")
+			return 1
+		if not existing:
+			to_create.append(name)
+			print(f"+ create {name}  ({doc['request_verb']} {doc['request_url']})")
+		elif changes := doc_changes(doc, existing):
+			to_update.append(name)
+			print(f"~ update {name}: {', '.join(changes)}")
+		else:
+			unchanged.append(name)
+	print(f"{len(unchanged)} unchanged, {len(to_update)} to update, {len(to_create)} to create")
+	if not (to_create or to_update):
+		return 0
+	if not apply:
+		print("Nothing was changed. Run with --yes to apply the creates and updates.")
+		return 0
+	failed = 0
+	for name in to_create + to_update:
+		command = cmd_create if name in to_create else cmd_update
+		try:
+			command(name, DOCS[name], token, obp_host)
+		except (Exception, SystemExit) as e:
+			failed += 1
+			print(f"✗ {'create' if name in to_create else 'update'} {name} failed: {e}")
+	print("  OBP caches its list of docs (40s by default), so a new one can 404 for a minute.")
+	print("  Check one with: python3 dynamic_resource_docs.py verify <doc> --wait 90")
+	return failed
+
+
 def main():
 	parser = argparse.ArgumentParser(description="Update the dynamic entity definitions on OBP from the spreadsheet, in place.")
 	parser.add_argument("file", nargs="?", default=DEFAULT_SPREADSHEET,
@@ -81,6 +125,7 @@ def main():
 	parser.add_argument("--yes", action="store_true", help="Apply the creates and updates (default: report only)")
 	parser.add_argument("--resave", nargs="*", metavar="ENTITY",
 		help="Also save unchanged entities again, so OBP builds their indexes: all of them, or the ones named")
+	parser.add_argument("--no-docs", action="store_true", help="Leave the Dynamic Resource Docs alone")
 	args = parser.parse_args()
 
 	sheet = parse_xlsx_entities(args.file)
@@ -202,6 +247,8 @@ def main():
 			print("  OBP builds any new indexes in the background.")
 		if created:
 			print("  New entities have new Roles: run ./create_role_groups.sh to give the groups theirs.")
+	if not args.no_docs:
+		failed += sync_docs(args.yes)
 	if to_recreate or only_obp:
 		print(f"Still needing attention (see above): {len(to_recreate)} needing a recreate, {len(only_obp)} only on OBP.")
 

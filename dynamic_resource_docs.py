@@ -40,7 +40,7 @@ import re
 import sys
 import time
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 
 from obp_client import token as DEFAULT_TOKEN, obp_host as DEFAULT_HOST, session
@@ -143,6 +143,49 @@ DOCS["registry_activities_query"] = {
     },
 }
 
+
+# The public registry's activity detail page (the app's /registry/activities/<id>). A Query
+# cannot nest one join inside another, so the page reads four Queries, each filtered to the
+# activity by the caller (obp_filter[activity_id]=eq:<id>):
+#   - registry_activity_query: the activity, its country, operator, chosen certification
+#     scheme, verifications, media and latest on-chain mint;
+#   - registry_activity_practices_query: its practices (via the link table to their names);
+#   - registry_activity_sdgs_query: its Sustainable Development Goals (likewise);
+#   - registry_activity_certificates_query: its certificates of compliance, with the scheme
+#     certified under and the certification body.
+# Like registry_activities_query, they are public only if every entity they read is
+# (public_access in the spreadsheet); otherwise an anonymous caller gets a 403.
+def _registry_query_doc(query_file, request_url, partial_function_name, summary, rows):
+    return {
+        "query_file": query_file,
+        "programming_lang": "Query",
+        "bank_id": SPACE_ID or None,
+        "request_verb": "GET",
+        "request_url": request_url,
+        "partial_function_name": partial_function_name,
+        "error_response_bodies": "OBP-50000: Unknown Error.",
+        "roles": "",
+        "summary": summary,
+        "description": "",
+        "tags": DOCS["registry_activities"]["tags"],
+        "example_request_body": {},
+        "success_response_body": {rows: [{}], "count": 1},
+    }
+
+
+DOCS["registry_activity_query"] = _registry_query_doc(
+    "registry_activity_query.json", "/registry/activity-query", "getRegistryActivityQuery",
+    "Get one OGCR registry activity with its details", "activities")
+DOCS["registry_activity_practices_query"] = _registry_query_doc(
+    "registry_activity_practices_query.json", "/registry/activity-practices-query",
+    "getRegistryActivityPracticesQuery", "Get the practices of OGCR registry activities", "practices")
+DOCS["registry_activity_sdgs_query"] = _registry_query_doc(
+    "registry_activity_sdgs_query.json", "/registry/activity-sdgs-query",
+    "getRegistryActivitySdgsQuery", "Get the Sustainable Development Goals of OGCR registry activities", "sdgs")
+DOCS["registry_activity_certificates_query"] = _registry_query_doc(
+    "registry_activity_certificates_query.json", "/registry/activity-certificates-query",
+    "getRegistryActivityCertificatesQuery", "Get the certificates of compliance of OGCR registry activities",
+    "certificates")
 
 # Resource-doc endpoints are served under an extra path segment that the Dynamic
 # Endpoint glossary entry does not mention: the docs describe
@@ -250,6 +293,19 @@ def find_existing(doc, token, host):
         ):
             return existing
     return None
+
+
+def doc_changes(doc, existing):
+    """The payload keys where the stored doc `existing` differs from `doc` (method_body decoded)."""
+    changed = []
+    for key, want in build_payload(doc).items():
+        have = existing.get(key)
+        if key == "method_body":
+            if have != want and unquote(have or "") != read_method_body(doc):
+                changed.append(key)
+        elif have != want:
+            changed.append(key)
+    return changed
 
 
 def cmd_compile(name, doc, token, host):

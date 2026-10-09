@@ -73,6 +73,13 @@ Run the `.sh` wrappers: each one changes to this directory, uses `.venv/bin/pyth
 | `recreate_dynamic_resource_docs.sh` | Compiles, deletes, recreates and checks each doc (step 6 of the recreate). `--dry-run` only compiles. | yes |
 | `dynamic_resource_docs.py` | The docs (`registry_activities_endpoint.scala`, `registry_activities_query.json`) and the commands the `.sh` uses. | yes |
 
+*Pages*
+
+| Script | What it does | Writes |
+|---|---|---|
+| `publish_architecture_page.sh` / `.py` | Publishes `architecture_page.html` (how the components work together) as an App Studio page, the system level `obp_portal_page` record shown on the Portal at `/pages/ogcr-architecture`. New pages are drafts unless `--publish`. If the page was edited in App Studio, shows the diff and leaves it alone: `--pull` saves those edits into the file, `--overwrite` replaces them. With `--kind app --source architecture_glossary_app.html --slug ogcr-architecture-glossary` it publishes the App that shows the Glossary Item below. | with `--yes` |
+| `publish_architecture_glossary_item.sh` / `.py` | Publishes `architecture_glossary_item.md` (the same overview, in Markdown) as the Dynamic Glossary Item "OGCR Architecture", which other descriptions can embed with `<!--OBP-GLOSSARY:FULL:OGCR Architecture-->`. Same `--pull` / `--overwrite` handling of edits made on OBP. | with `--yes` |
+
 *Modules used by the scripts (not run directly)*
 
 | Module | What it holds |

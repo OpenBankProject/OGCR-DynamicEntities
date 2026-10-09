@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OGCR Architecture</title>
+<style>
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #0f172a; background: #fff; line-height: 1.5; font-size: 15px; }
+  header { padding: 22px 20px 16px; background: linear-gradient(135deg, #0f172a, #1d4ed8); color: #fff; }
+  header h1 { margin: 0; font-size: 24px; }
+  header .meta { margin-top: 4px; font-size: 13px; color: #dbeafe; }
+  main { padding: 8px 20px 24px; max-width: 980px; }
+  main h3 { font-size: 18px; margin: 22px 0 8px; }
+  main h3 a { color: inherit; text-decoration: none; }
+  main p { margin: 0 0 10px; }
+  main pre { background: #f1f5f9; border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: 12.5px; line-height: 1.35; }
+  main code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
+  main :not(pre) > code { background: #f1f5f9; padding: 0 4px; border-radius: 4px; }
+  main table { border-collapse: collapse; width: 100%; font-size: 13.5px; display: block; overflow-x: auto; }
+  main th, main td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid #cbd5e1; }
+  main th { background: #f1f5f9; }
+  .muted { color: #475569; }
+  .error { color: #b91c1c; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">OGCR Architecture</h1>
+  <div class="meta" id="meta">Loaded from the OBP Glossary</div>
+</header>
+<main id="content"><p class="muted">Loading…</p></main>
+<script>
+  // The text lives in the Dynamic Glossary Item "OGCR Architecture" (edit it in the API Manager's
+  // Glossary). OBP returns it as Markdown and as sanitised HTML; this app shows the HTML.
+  const GLOSSARY_TITLE = 'OGCR-Architecture';
+
+  (async () => {
+    const content = document.getElementById('content');
+    try {
+      const item = await obp.get('/obp/v7.0.0/api/glossary/' + encodeURIComponent(GLOSSARY_TITLE));
+      document.getElementById('title').textContent = item.title;
+      if (item.updated_at) {
+        document.getElementById('meta').textContent =
+          'From the OBP Glossary, last updated ' + new Date(item.updated_at).toLocaleDateString();
+      }
+      content.innerHTML = item.description.html;
+    } catch (e) {
+      content.innerHTML = '';
+      const p = document.createElement('p');
+      p.className = 'error';
+      p.textContent = 'Could not load the Glossary Item: ' + e.message;
+      content.appendChild(p);
+    }
+  })();
+</script>
+</body>
+</html>

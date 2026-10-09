@@ -1,0 +1,142 @@
+<style>
+.arch { --a-ink: #0f172a; --a-muted: #475569; --a-line: #cbd5e1; --a-bg: #ffffff; --a-soft: #f1f5f9;
+  --a-obp: #1d4ed8; --a-obp-soft: #dbeafe; --a-chain: #7c3aed; --a-chain-soft: #ede9fe;
+  --a-tool: #047857; --a-tool-soft: #d1fae5; --a-app: #b45309; --a-app-soft: #fef3c7;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--a-ink); background: var(--a-bg);
+  line-height: 1.45; max-width: 1100px; margin: 0 auto; font-size: 14px; }
+.arch * { box-sizing: border-box; }
+.arch .hero { padding: 24px 24px 18px; background: linear-gradient(135deg, #0f172a, #1d4ed8); color: #fff; border-radius: 12px; }
+.arch .hero h1 { margin: 0 0 6px; font-size: 26px; line-height: 1.15; }
+.arch .hero p { margin: 0; max-width: 80ch; opacity: .92; font-size: 15px; }
+.arch section { padding: 16px 2px 0; }
+.arch h2 { font-size: 18px; margin: 0 0 8px; }
+.arch h3 { font-size: 15px; margin: 0 0 4px; }
+.arch p { margin: 0; }
+.arch code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .88em; background: var(--a-soft); padding: 0 4px; border-radius: 4px; }
+
+/* Diagram: three bands (inputs, OBP, chain) joined by labelled arrows. */
+.arch .diagram { display: grid; gap: 8px; background: var(--a-soft); border-radius: 12px; padding: 14px; }
+.arch .band { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.arch .node { background: var(--a-bg); border: 2px solid var(--a-line); border-radius: 10px; padding: 8px 10px; }
+.arch .node b { display: block; }
+.arch .node span { display: block; font-size: 12px; color: var(--a-muted); }
+.arch .node.obp { border-color: var(--a-obp); background: var(--a-obp-soft); }
+.arch .node.chain { border-color: var(--a-chain); background: var(--a-chain-soft); }
+.arch .node.tool { border-color: var(--a-tool); background: var(--a-tool-soft); }
+.arch .node.app { border-color: var(--a-app); background: var(--a-app-soft); }
+.arch .node.input { border-style: dashed; }
+.arch .caps { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.arch .caps i { font-style: normal; font-size: 12px; background: var(--a-bg); border: 1px solid var(--a-obp); color: var(--a-obp); border-radius: 999px; padding: 1px 8px; }
+.arch .arrows { display: grid; gap: 4px 8px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); font-size: 12px; color: var(--a-muted); text-align: center; }
+.arch .arrows b { color: var(--a-ink); }
+
+/* Component cards */
+.arch .cards { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.arch .card { border: 1px solid var(--a-line); border-left: 5px solid var(--a-line); border-radius: 10px; padding: 10px 12px; background: var(--a-bg); }
+.arch .card.obp { border-left-color: var(--a-obp); }
+.arch .card.chain { border-left-color: var(--a-chain); }
+.arch .card.tool { border-left-color: var(--a-tool); }
+.arch .card.app { border-left-color: var(--a-app); }
+.arch .card, .arch .rule, .arch tr { break-inside: avoid; }
+
+/* Table and rules */
+.arch .table-wrap { overflow-x: auto; }
+.arch table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.arch th, .arch td { text-align: left; vertical-align: top; padding: 5px 8px; border-bottom: 1px solid var(--a-line); }
+.arch th { background: var(--a-soft); }
+.arch .rules { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.arch .rule { background: var(--a-soft); border-radius: 10px; padding: 8px 10px; }
+.arch .rule b { display: block; }
+</style>
+
+<div class="arch obp-landing">
+
+<header class="hero">
+  <h1>How the OGCR components work together</h1>
+  <p>The OGCR registry records carbon activities, parcels, verifications and certificates, and turns verified facts into tokens on the OGCR blockchain. A spreadsheet defines the registry's data model and access rules, which are served as secured APIs. The on-chain state is mirrored back into the registry, where it can be filtered and combined with off-chain data.</p>
+</header>
+
+<section>
+  <h2>The big picture</h2>
+  <div class="diagram">
+    <div class="band">
+      <div class="node input"><b>Schema definition spreadsheet</b><span>Entities, fields, references, indexes and the Role Group matrix</span></div>
+      <div class="node tool"><b>OGCR-DynamicEntities</b><span>Applies the spreadsheet to OBP-API</span></div>
+      <div class="node app"><b>OGCR-App and other clients</b><span>Read and write registry data</span></div>
+    </div>
+    <div class="arrows">
+      <div><b>&#8595;</b> entity definitions, Roles, Role Groups, Dynamic Queries</div>
+      <div><b>&#8597;</b> CRUD and queries over OAuth2 / OIDC</div>
+    </div>
+    <div class="node obp">
+      <b>OBP-API: the foundation</b>
+      <span>Holds the registry's off-chain data in the <code>ogcr</code> Space and serves it as APIs</span>
+      <div class="caps"><i>Dynamic Entities</i><i>Generated CRUD endpoints</i><i>OAuth2 / OIDC</i><i>RBAC</i><i>Indexes</i><i>Dynamic Queries</i></div>
+    </div>
+    <div class="arrows">
+      <div><b>&#8593;</b> ogcr-tokenizer polls OBP-API for verified records</div>
+      <div><b>&#8593;</b> OGCR-Chain-Cache writes <code>*_on_chain</code> records</div>
+    </div>
+    <div class="band">
+      <div class="node tool"><b>ogcr-tokenizer</b><span>Mints tokens when registry conditions are met</span></div>
+      <div class="node chain"><b>OGCR chain (chain id 2025)</b><span>Private EVM chain running the OGCR-Smart-Contracts</span></div>
+      <div class="node tool"><b>OGCR-Chain-Cache</b><span>Reads the chain and mirrors each token into OBP</span></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>The components</h2>
+  <div class="cards">
+    <div class="card obp">
+      <h3>OBP-API</h3>
+      <p>The single gateway to the registry. It stores the Dynamic Entities and generates their CRUD endpoints. Every call is authenticated with OAuth2 / OIDC and checked against Roles (RBAC), such as <code>CanCreateDynamicEntityRecord_activity</code>, which people get through Role Groups. Indexes and Dynamic Queries serve filtered and joined views, such as the public registry.</p>
+    </div>
+    <div class="card tool">
+      <h3>OGCR-DynamicEntities</h3>
+      <p>Scripts that apply the schema definition spreadsheet to OBP-API. They create the entities (fields, types, references, indexes), the Role Groups and the Dynamic Queries, and check that OBP matches the spreadsheet.</p>
+    </div>
+    <div class="card chain">
+      <h3>OGCR-Smart-Contracts</h3>
+      <p>Solidity contracts for chain 2025. <code>ParcelNFT</code>, <code>ActivityNFT</code> and <code>CertificationNFT</code> hold a URL and hash of the registry record they attest to. Each <code>CarbonCreditBatchNFT</code> owns an ERC-6551 account holding its <code>CarbonCredit</code> (ERC-20) balance.</p>
+    </div>
+    <div class="card tool">
+      <h3>ogcr-tokenizer</h3>
+      <p>Polls OBP and mints a token to the operator's wallet when a record reaches a qualifying state (table below). Each token is minted exactly once, and a token waits until the tokens it depends on exist. It only reads from OBP and reports its health at <code>/healthz</code>.</p>
+    </div>
+    <div class="card tool">
+      <h3>OGCR-Chain-Cache</h3>
+      <p>Reads every OGCR token from the chain and writes one mirror record per token (<code>parcel_on_chain</code>, <code>activity_on_chain</code>, …) into OBP, so on-chain state can be joined with off-chain records through the normal APIs. It owns the definitions of these entities and writes <code>chain_sync_status</code> after each run.</p>
+    </div>
+    <div class="card app">
+      <h3>OGCR-App</h3>
+      <p>The registry and marketplace web app. Users log in with OIDC, and it reads and writes through OBP-API, never directly on chain.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>What the tokenizer mints, and when</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Token</th><th>Minted when</th><th>Also required</th></tr></thead>
+      <tbody>
+        <tr><td><code>ParcelNFT</code></td><td><code>parcel_owner_verification</code> is <code>verified</code></td><td>parcel, activity_parcel_verification, activity, operator</td></tr>
+        <tr><td><code>ActivityNFT</code></td><td><code>activity_verification</code> is <code>verified</code></td><td>activity, operator</td></tr>
+        <tr><td><code>CertificationNFT</code></td><td>a <code>certificate_of_compliance</code> is created</td><td>ActivityNFT, activity, operator</td></tr>
+        <tr><td><code>CarbonCreditBatchNFT</code> + <code>CarbonCredit</code></td><td><code>activity_monitoring_period_verification</code> is <code>verified</code></td><td>ActivityNFT, certificate_of_compliance, certification_scheme, certification_body</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>Design rules</h2>
+  <div class="rules">
+    <div class="rule"><b>One gateway</b>All access to registry data goes through OBP-API, so authentication and Roles are enforced in one place.</div>
+    <div class="rule"><b>One-way services</b>The tokenizer reads OBP and writes to the chain. The chain cache reads the chain and writes to OBP.</div>
+    <div class="rule"><b>Safe to repeat</b>Minting is deduplicated on chain and mirror records are upserted, so a rerun never creates duplicates.</div>
+  </div>
+</section>
+
+</div>

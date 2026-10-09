@@ -7,7 +7,7 @@ The OGCR registry records carbon activities, parcels, verifications and certific
 - **Agile data model definition and construction.** The data model is defined in a spreadsheet and built as Dynamic Entities at runtime, with their endpoints, Roles and indexes. Changing it needs no code change or redeploy, and existing records are kept.
 - **Open source.** OBP-API, the OBP-MCP server, Opey and the OGCR repositories are open source (AGPL-3.0).
 - **Open standards.** OAuth2, OpenID Connect, OpenAPI, JSON, MCP, and EVM tokens (ERC-721, ERC-20, ERC-6551).
-- **Decoupled apps.** OGCR-App and the Operator and Certifier Platforms are separate apps that depend only on the API, so each can be built, deployed and replaced on its own.
+- **Decoupled apps.** OGCR-App and the Operator and Certifier Platforms are separate apps that use the API and OIDC for authentication.
 - **OAuth2 / OIDC.** People log in with an OpenID Connect provider, and apps and services call the API with OAuth2 tokens.
 - **RBAC.** Each operation on each entity needs a Role, and people get Roles through Role Groups.
 - **Dockerised deployment.** Each service is built as a Docker image and deployed on Kubernetes.

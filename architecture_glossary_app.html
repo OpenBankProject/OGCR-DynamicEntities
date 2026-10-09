@@ -4,23 +4,42 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OGCR Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #0f172a; background: #fff; line-height: 1.5; font-size: 15px; }
-  header { padding: 22px 20px 16px; background: linear-gradient(135deg, #0f172a, #1d4ed8); color: #fff; }
-  header h1 { margin: 0; font-size: 24px; }
-  header .meta { margin-top: 4px; font-size: 13px; color: #dbeafe; }
-  main { padding: 8px 20px 24px; max-width: 980px; }
-  main h3 { font-size: 18px; margin: 22px 0 8px; }
+  /* The Portal's dark theme (OBP-Frontend packages/shared/obp-theme.css). An app runs in its own
+     sandboxed document, so it can't inherit the Portal's styles: these restate them. */
+  :root {
+    --bg: oklch(14.97% 0.03 285.58deg);        /* primary-950 */
+    --panel: oklch(19.8% 0.03 283.79deg);      /* primary-800 */
+    --line: oklch(26.42% 0.02 280.83deg);      /* primary-500 */
+    --text: oklch(100% 0 none);                /* surface-50 */
+    --muted: oklch(76.68% 0 none);             /* surface-300 */
+    --accent: oklch(68.5% 0.14 148.36deg);     /* secondary-500, the green */
+    --code: oklch(81.32% 0.08 209.6deg);       /* tertiary-300, the cyan */
+  }
+  body { margin: 0; font-family: "Plus Jakarta Sans", Avenir, Montserrat, Corbel, 'URW Gothic', source-sans-pro, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.6; font-size: 15px; }
+  header { padding: 22px 20px 14px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 26px; font-weight: 700; }
+  header .meta { margin-top: 4px; font-size: 13px; color: var(--muted); }
+  main { padding: 4px 20px 28px; max-width: 980px; }
+  main h3 { font-size: 18px; font-weight: 600; margin: 26px 0 10px; color: var(--accent); }
   main h3 a { color: inherit; text-decoration: none; }
   main p { margin: 0 0 10px; }
-  main pre { background: #f1f5f9; border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: 12.5px; line-height: 1.35; }
-  main code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
-  main :not(pre) > code { background: #f1f5f9; padding: 0 4px; border-radius: 4px; }
+  main a { color: var(--accent); }
+  main strong { color: var(--text); }
+  main pre { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; overflow-x: auto; font-size: 12.5px; line-height: 1.35; }
+  main code { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace; font-size: .88em; }
+  main pre code { color: var(--text); }
+  main :not(pre) > code { color: var(--code); background: var(--panel); padding: .1em .4em; border-radius: 4px; }
+  main ul { padding-left: 20px; }
+  main li { margin-bottom: 4px; }
   main table { border-collapse: collapse; width: 100%; font-size: 13.5px; display: block; overflow-x: auto; }
-  main th, main td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid #cbd5e1; }
-  main th { background: #f1f5f9; }
-  .muted { color: #475569; }
-  .error { color: #b91c1c; }
+  main th, main td { text-align: left; vertical-align: top; padding: 7px 9px; border-bottom: 1px solid var(--line); }
+  main th { background: var(--panel); font-weight: 600; }
+  .muted { color: var(--muted); }
+  .error { color: oklch(70% 0.19 25deg); }
 </style>
 </head>
 <body>
@@ -44,6 +63,14 @@
           'From the OBP Glossary, last updated ' + new Date(item.updated_at).toLocaleDateString();
       }
       content.innerHTML = item.description.html;
+      // The app runs in a sandboxed frame, so a link can't open by itself: ask the host page to
+      // open it. Links within the page (#...) still scroll as usual.
+      content.addEventListener('click', (ev) => {
+        const link = ev.target.closest('a[href]');
+        if (!link || link.getAttribute('href').startsWith('#')) return;
+        ev.preventDefault();
+        obp.navigate(link.href);
+      });
     } catch (e) {
       content.innerHTML = '';
       const p = document.createElement('p');

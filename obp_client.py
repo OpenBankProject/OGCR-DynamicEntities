@@ -1,11 +1,10 @@
 import http.cookiejar
 import os
-from dotenv import load_dotenv
+import obp_target  # loads .env and picks LOCAL or PROD settings
 import requests
 from json import loads
 import logging
 
-load_dotenv()
 obp_log_level = os.getenv('OBP_LOG_LEVEL', 'INFO')
 
 logging.basicConfig(level=obp_log_level)

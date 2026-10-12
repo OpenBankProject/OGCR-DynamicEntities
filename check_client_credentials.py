@@ -27,9 +27,8 @@ import os
 import sys
 
 import requests
-from dotenv import load_dotenv
+import obp_target  # loads .env and picks LOCAL or PROD settings
 
-load_dotenv()
 
 
 def env(name, default=None):

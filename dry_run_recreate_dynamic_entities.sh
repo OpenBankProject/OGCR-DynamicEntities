@@ -27,6 +27,9 @@ if [ -z "${PYTHON:-}" ] && [ -x ".venv/bin/python" ]; then
 fi
 PYTHON="${PYTHON:-python3}"
 
+# Run on the OBP target: LOCAL (default), PROD or BOTH, from --target= or OBP_TARGET.
+source ./target.sh
+
 MATRIX="min_field_matrix.xlsx"
 USERS_SHEET="DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx"
 ONLY_ENTITIES=false

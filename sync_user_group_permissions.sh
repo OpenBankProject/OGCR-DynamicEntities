@@ -20,4 +20,7 @@ if [ -z "${PYTHON:-}" ] && [ -x ".venv/bin/python" ]; then
 fi
 PYTHON="${PYTHON:-python3}"
 
+# Run on the OBP target: LOCAL (default), PROD or BOTH, from --target= or OBP_TARGET.
+source ./target.sh
+
 exec "$PYTHON" sync_user_group_permissions.py "$@"

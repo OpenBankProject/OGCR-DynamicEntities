@@ -32,12 +32,11 @@ import os
 import sys
 
 import requests
-from dotenv import load_dotenv
+import obp_target  # loads .env and picks LOCAL or PROD settings
 
 from obp_space import ROLE_BANK_ID, SPACE_ID, describe
 from role_groups import GROUP_ADMIN_ROLES
 
-load_dotenv()
 
 logging.basicConfig(
 	level=os.getenv('OBP_LOG_LEVEL', 'INFO'),

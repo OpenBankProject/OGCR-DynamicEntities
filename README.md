@@ -14,9 +14,35 @@ pip install -r requirements.txt
   - **OBP_HOSTNAME:** (optional) OBP base URL; defaults in `obp_client.py`
   - **OBP_ENTITY_SPACE_ID:** (optional) the bank id (aka Space) that owns all the OGCR dynamic entities. Defaults to `ogcr`; set it to the empty string for system level. See "Where the entities live" below.
 
+**LOCAL and PROD (`--target`, `OBP_TARGET`)**
+
+`.env` can hold the settings of two OBP instances, each variable prefixed with `LOCAL_` or `PROD_` (see `env_example`):
+
+```
+LOCAL_OBP_HOSTNAME=http://localhost:8080
+LOCAL_OBP_USERNAME=...
+PROD_OBP_HOSTNAME=https://dcr.ogcr.tesobe.com
+PROD_OBP_USERNAME=...
+```
+
+`obp_target.py` picks one by `OBP_TARGET` (`LOCAL`, the default, or `PROD`) and copies its `<TARGET>_X` settings to the plain names, so every script reads `OBP_HOSTNAME`, `OBP_USERNAME` and so on as before. Any variable can be prefixed: hostname, username, password, consumer key, `OBP_AUTH_MODE`, the `OIDC_*` settings, `OBP_ENTITY_SPACE_ID`. A variable left unprefixed (e.g. `OBP_LOG_LEVEL`) is shared by both. Once `.env` has prefixes, `<TARGET>_OBP_HOSTNAME` must be set, so PROD never falls back to the LOCAL or plain settings. A `.env` without prefixes still works, as LOCAL; PROD is then refused.
+
+The `.sh` wrappers (all but the offline `check_min_field_matrix.sh`) take `--target=LOCAL|PROD|BOTH`, or `OBP_TARGET` from the environment, via `target.sh`:
+
+```bash
+./domain_api.sh list                      # LOCAL
+./domain_api.sh list --target=PROD        # PROD only
+./domain_api.sh create --target=BOTH      # LOCAL, then PROD if LOCAL succeeded
+OBP_TARGET=BOTH ./recreate_dynamic_entities.sh
+```
+
+Each run starts with a line naming its target and host, e.g. `=== PROD (https://dcr.ogcr.tesobe.com) ===`. With `BOTH`, both targets' settings are checked first, LOCAL runs first, and a LOCAL failure stops the run before PROD. A wrapper that calls other wrappers (as `recreate_dynamic_entities.sh` does) passes its target on, so they run once, not once per target again. A `.py` run directly uses `OBP_TARGET` (default LOCAL), but not `BOTH`: `OBP_TARGET=PROD python3 delete_dynamic_entities.py ...`.
+
+`BOTH` does everything twice: `recreate_dynamic_entities.sh` asks for confirmation once per target, and Role grants send their emails once per instance.
+
 **Scripts index**
 
-Run the `.sh` wrappers: each one changes to this directory, uses `.venv/bin/python` when it exists, and passes its arguments to the `.py` of the same name. Host, credentials and space come from `.env` (see Setup). "Writes" says whether a script changes anything on OBP.
+Run the `.sh` wrappers: each one changes to this directory, uses `.venv/bin/python` when it exists, and passes its arguments to the `.py` of the same name. Host, credentials and space come from `.env` (see Setup), for LOCAL unless `--target=PROD` or `--target=BOTH` (see "LOCAL and PROD"). "Writes" says whether a script changes anything on OBP.
 
 *The whole pipeline*
 
@@ -74,6 +100,12 @@ Run the `.sh` wrappers: each one changes to this directory, uses `.venv/bin/pyth
 | `recreate_dynamic_resource_docs.sh` | Compiles, deletes, recreates and checks each doc (step 6 of the recreate). `--dry-run` only compiles. | yes |
 | `dynamic_resource_docs.py` | The docs (`registry_activities_endpoint.scala`, `registry_activities_query.json`) and the commands the `.sh` uses. | yes |
 
+*Domain API*
+
+| Script | What it does | Writes |
+|---|---|---|
+| `domain_api.sh` / `.py` | `list`, `create`, `update` or `delete` the space's Domain API, which serves its entities and Dynamic Resource Docs under a base path of its own (default `crcf/<space>/v1`, so `/crcf/ogcr/v1/public/country` answers what `/obp/v7.0.0/banks/ogcr/dynamic-entities/public/country` does, with the same authentication and Roles; `/crcf/ogcr/v1/openapi.yaml` is its OpenAPI document). `--base-path`, `--version`, `--title`, `--description`. See the `Domain APIs` glossary entry on your OBP instance. | yes, except `list` |
+
 *Pages*
 
 | Script | What it does | Writes |
@@ -86,6 +118,8 @@ Run the `.sh` wrappers: each one changes to this directory, uses `.venv/bin/pyth
 
 | Module | What it holds |
 |---|---|
+| `obp_target.py` | Picks LOCAL or PROD by `OBP_TARGET` and loads its settings from `.env`. |
+| `target.sh` | Sourced by the `.sh` wrappers: runs them on LOCAL, PROD or BOTH. |
 | `obp_client.py` | DirectLogin, the host and the shared HTTP session. |
 | `obp_space.py` | Builds every dynamic entity URL and Role bank id from `OBP_ENTITY_SPACE_ID`. |
 | `obp_dynamic_api.py` | Builds entity definitions from the parsed spreadsheet and creates or updates them; decides which fields are indexed. |

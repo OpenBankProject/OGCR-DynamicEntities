@@ -18,9 +18,8 @@ No side effects on import (no login), so offline scripts can use it too.
 """
 import os
 
-from dotenv import load_dotenv
+import obp_target  # loads .env and picks LOCAL or PROD settings
 
-load_dotenv()
 
 DEFAULT_SPACE_ID = "ogcr"
 

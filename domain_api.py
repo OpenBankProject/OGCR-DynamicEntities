@@ -6,7 +6,7 @@ the same authentication, Roles and access checks as the OBP URL. See the
 
 Usage:
     python3 domain_api.py list
-    python3 domain_api.py create [--base-path crcf/ogcr/v1] [--version 1.0.0] [--title ...] [--description ...]
+    python3 domain_api.py create --title "..." [--base-path crcf/ogcr/v1] [--version 1.0.0] [--description ...]
     python3 domain_api.py update [--base-path crcf/ogcr/v1] [--version ...] [--title ...] [--description ...]
     python3 domain_api.py delete [--base-path crcf/ogcr/v1]
 
@@ -73,8 +73,11 @@ def cmd_create(args):
 		print(f"✓ Domain API '{args.base_path}' already exists")
 		show(existing)
 		return 0
+	if not args.title:
+		print("✗ create needs --title \"...\" (1 to 255 characters); --description is optional")
+		return 1
 	body = {"base_path": args.base_path, "version": args.version or "1.0.0",
-		"title": args.title or "", "description": args.description or ""}
+		"title": args.title, "description": args.description or ""}
 	response = _check(session.post(domain_apis_url(), json=body,
 		headers={"Authorization": authorization(token)}, timeout=30), f"Creating Domain API '{args.base_path}'")
 	print(f"✓ Created Domain API '{args.base_path}' over bank '{ROLE_BANK_ID}'")

@@ -8,7 +8,7 @@
 #
 # Usage:
 #   ./domain_api.sh list
-#   ./domain_api.sh create [--base-path crcf/ogcr/v1] [--version 1.0.0] [--title ...]
+#   ./domain_api.sh create --title "..." [--base-path crcf/ogcr/v1] [--version 1.0.0] [--description ...]
 #   ./domain_api.sh update [--version 1.1.0] [--title ...] [--description ...]
 #   ./domain_api.sh delete
 #

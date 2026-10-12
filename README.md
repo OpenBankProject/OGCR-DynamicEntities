@@ -32,7 +32,7 @@ The `.sh` wrappers (all but the offline `check_min_field_matrix.sh`) take `--tar
 ```bash
 ./domain_api.sh list                      # LOCAL
 ./domain_api.sh list --target=PROD        # PROD only
-./domain_api.sh create --target=BOTH      # LOCAL, then PROD if LOCAL succeeded
+./domain_api.sh create --title "TITLE" --target=BOTH   # LOCAL, then PROD if LOCAL succeeded
 OBP_TARGET=BOTH ./recreate_dynamic_entities.sh
 ```
 
@@ -91,7 +91,8 @@ OBP_TARGET=T python3 dynamic_resource_docs.py compile|verify|list|create|update|
 
 # Domain API
 ./domain_api.sh list|create|update|delete [--base-path PATH] [--version X.Y.Z] [--title "TITLE"] [--description "TEXT"] [--target=T]
-#   --base-path defaults to crcf/<space>/v1, e.g. crcf/ogcr/v1; create's --version defaults to 1.0.0
+#   create needs --title (1 to 255 characters); --description is optional, --version defaults to 1.0.0
+#   --base-path defaults to crcf/<space>/v1, e.g. crcf/ogcr/v1
 
 # Pages
 ./publish_architecture_page.sh [--source FILE] [--slug SLUG] [--title "TITLE"] [--kind page|app] [--yes] [--overwrite] [--pull] [--publish | --draft] [--target=T]
@@ -106,8 +107,8 @@ Examples:
 ```bash
 ./check_login_and_roles.sh --target=BOTH                 # can the scripts log in on both, with the Roles they need?
 ./diff_entities.sh --target=PROD                         # how prod's entities differ from the spreadsheet
-./domain_api.sh create                                   # crcf/ogcr/v1 on LOCAL
-./domain_api.sh create --target=PROD                     # ... then on PROD
+./domain_api.sh create --title "TITLE"                   # crcf/ogcr/v1 on LOCAL
+./domain_api.sh create --title "TITLE" --target=PROD     # ... then on PROD
 ./update_dynamic_entities.sh --yes --target=BOTH         # LOCAL first, PROD only if LOCAL succeeded
 OBP_TARGET=PROD python3 delete_dynamic_entities.py --yes
 ```

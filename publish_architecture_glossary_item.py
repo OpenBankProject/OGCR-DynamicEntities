@@ -31,7 +31,7 @@ import sys
 import urllib.parse
 from pathlib import Path
 
-from obp_client import obp_host, session, token
+from obp_client import obp_host, session, token, authorization
 
 HERE = Path(__file__).parent
 GLOSSARY_URL = f"{obp_host}/obp/v7.0.0/api/glossary"
@@ -41,7 +41,7 @@ DEFAULT_TITLE = "OGCR Architecture"
 
 
 def headers():
-	return {"Authorization": f"DirectLogin token={token}", "Content-Type": "application/json"}
+	return {"Authorization": authorization(token), "Content-Type": "application/json"}
 
 
 def item_url(title):

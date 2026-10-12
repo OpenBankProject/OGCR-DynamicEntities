@@ -25,7 +25,7 @@ from check_min_field_matrix import check as check_sheet
 from create_space_bank import get_bank
 from fixtures import fixture_records
 from get_and_delete_dynamic_entities import get_all_system_dynamic_entities
-from obp_client import token, obp_host, session
+from obp_client import token, obp_host, session, authorization
 from obp_space import ROLE_BANK_ID, SPACE_ID, describe
 from example_data_creation_log_helpers import LOG_ENTITY_NAME
 from parse_minimum_fields import CHAIN_CACHE_ENTITIES, parse_xlsx_entities
@@ -59,10 +59,10 @@ def heading(title):
 def main():
 	spreadsheet = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_SPREADSHEET
 	if not token:
-		say("✗ DirectLogin failed; cannot read OBP")
+		say("✗ Login to OBP failed; cannot read OBP")
 		return 1
 	user = session.get(f"{obp_host}/obp/v6.0.0/users/current",
-		headers={"Authorization": f"DirectLogin token={token}"}, timeout=30).json()
+		headers={"Authorization": authorization(token)}, timeout=30).json()
 
 	heading("Nothing below is carried out. This only reports what would happen.")
 	say(f"Host:     {obp_host}")

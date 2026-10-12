@@ -30,7 +30,7 @@ import re
 
 import requests
 
-from obp_client import token as default_token, obp_host, session
+from obp_client import token as default_token, obp_host, session, authorization
 from obp_space import record_path
 from parse_minimum_fields import parse_xlsx_entities
 from timing import print_slowest, timed
@@ -319,7 +319,7 @@ def existing_object_ids(entity_name, token=None):
     url = f"{BASE_URL}{record_path(entity_name)}"
     headers = {}
     if token:
-        headers["Authorization"] = f"DirectLogin token={token}"
+        headers["Authorization"] = authorization(token)
     try:
         response = session.get(url, headers=headers)
         response.raise_for_status()
@@ -335,7 +335,7 @@ def create_object(entity_name, data, token=None):
     url = f"{BASE_URL}{record_path(entity_name)}"
     headers = {"Content-Type": "application/json"}
     if token:
-        headers["Authorization"] = f"DirectLogin token={token}"
+        headers["Authorization"] = authorization(token)
     response = session.post(url, headers=headers, json=data)
     response.raise_for_status()
     return response.json()
@@ -344,7 +344,7 @@ def create_object(entity_name, data, token=None):
 def main():
     parser = argparse.ArgumentParser(description="Create example objects for the OGCR dynamic entities from the spreadsheet.")
     parser.add_argument("file", nargs="?", default=DEFAULT_SPREADSHEET, help=f"Spreadsheet path (default: {DEFAULT_SPREADSHEET}).")
-    parser.add_argument("--token", default=default_token, help="DirectLogin token (overrides obp_client.py).")
+    parser.add_argument("--token", default=default_token, help="OBP token (overrides obp_client.py).")
     parser.add_argument("--log", action="store_true", help=f"Record creation/errors/fallbacks in the {LOG_ENTITY_NAME} dynamic entity (off by default).")
     parser.add_argument("--fixtures-only", action="store_true", help="Only write the controlled vocabularies from fixtures.py, leaving every other entity untouched. Rows already present are skipped, so this tops up a partially populated table.")
     args = parser.parse_args()

@@ -18,7 +18,7 @@ Options:
     file (positional)  Path to the parsed entities file. Defaults to
                        `entities_output.txt`.
     --yes              Skip the interactive confirmation prompt.
-    --token            DirectLogin token (overrides token from obp_client.py).
+    --token            OBP token (overrides token from obp_client.py).
 
 Exits non-zero if any target entity could not be deleted, so callers under
 `set -e` (e.g. recreate_dynamic_entities.sh) abort instead of recreating on top
@@ -171,7 +171,7 @@ def main():
 	parser.add_argument(
 		"--token",
 		default=default_token,
-		help="DirectLogin token (overrides token from obp_client.py).",
+		help="OBP token (overrides token from obp_client.py).",
 	)
 	args = parser.parse_args()
 

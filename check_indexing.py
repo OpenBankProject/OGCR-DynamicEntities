@@ -36,7 +36,7 @@ import time
 import urllib.parse
 from pathlib import Path
 
-from obp_client import token as TOKEN, obp_host as HOST, session
+from obp_client import token as TOKEN, obp_host as HOST, session, authorization
 from obp_space import SPACE_ID, describe, record_path
 from query_indexes import QUERY_FILES_GLOB, QUERY_INDEXED_FIELDS
 
@@ -52,7 +52,7 @@ BUILD_HELP = ("If this persists, save the definitions again so OBP builds the in
 
 
 def headers():
-	return {"Authorization": f"DirectLogin token={TOKEN}", "Content-Type": "application/json"}
+	return {"Authorization": authorization(TOKEN), "Content-Type": "application/json"}
 
 
 def declarations():

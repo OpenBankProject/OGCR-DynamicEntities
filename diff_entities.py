@@ -26,7 +26,7 @@ import json
 import os
 import sys
 
-from obp_client import obp_host, session, token
+from obp_client import obp_host, session, token, authorization
 from obp_dynamic_api import BUILTIN_REFERENCE_TYPES, build_entity_definition_from_parsed
 from obp_space import SPACE_ID
 from example_data_creation_log_helpers import LOG_ENTITY_NAME
@@ -54,7 +54,7 @@ def get_entities_on_obp(bank_id):
 		url = f"{obp_host}/obp/v6.0.0/management/system-dynamic-entities"
 	else:
 		url = f"{obp_host}/obp/v6.0.0/management/banks/{bank_id}/dynamic-entities"
-	response = session.get(url, headers={"Authorization": f"DirectLogin token={token}"}, timeout=60)
+	response = session.get(url, headers={"Authorization": authorization(token)}, timeout=60)
 	if not response.ok:
 		raise RuntimeError(f"{response.status_code} {response.text}")
 	return {e["entity_name"]: e for e in response.json().get("dynamic_entities", [])}
@@ -136,7 +136,7 @@ def main():
 		print(f"✗ No entities read from {args.file}")
 		return 2
 	if not token:
-		print("✗ DirectLogin failed")
+		print("✗ Login to OBP failed")
 		return 2
 	try:
 		on_obp = get_entities_on_obp(args.bank_id)

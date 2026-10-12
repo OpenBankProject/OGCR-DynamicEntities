@@ -86,3 +86,5 @@ Arrows point from the caller to the service it calls.
 - [API Explorer II](https://github.com/OpenBankProject/API-Explorer-II)
 
 To browse the registry's endpoints, open [API Explorer II](https://apiexplorer.dcr.ogcr.tesobe.com/?content=dynamic&bank_id=ogcr).
+
+The OGCR Project has received funding from the European Union's Horizon Europe programme under grant agreement 101218854.

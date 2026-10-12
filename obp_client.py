@@ -58,34 +58,79 @@ def check_obp_api_health(base_url):
 
 check_obp_api_health(obp_host)
 
-try:
-	username = os.environ['OBP_USERNAME']
-except KeyError:
-	logger.exception('OBP_USERNAME not set in os environment or .env file! Exiting now.')
-	exit(1)
-try:
-	password = os.environ['OBP_PASSWORD']
-except KeyError:
-	logger.exception('OBP_PASSWORD not set in os environment or .env file! Exiting now.')
-	exit(1)
-try:
-	consumer_key = os.environ['OBP_CONSUMER_KEY']
-except KeyError:
-	logger.exception('OBP_CONSUMER_KEY not set in os environment or .env file! Exiting now.')
-	exit(1)
-
 def mask_credential(value):
 	"""Mask a credential showing first 3 and last 2 characters"""
 	if len(value) <= 5:
 		return value[:1] + '*' * (len(value) - 1)
 	return value[:3] + '*' * (len(value) - 5) + value[-2:]
 
+
+def required_env(name):
+	try:
+		return os.environ[name]
+	except KeyError:
+		logger.error(f'{name} not set in os environment or .env file! Exiting now.')
+		exit(1)
+
+
+def create_client_credentials_token(issuer, client_id, client_secret):
+	"""An access token for this app itself (OAuth2 client credentials), or None (with the reason logged).
+	The token endpoint is discovered from the issuer, as OGCR-chain-cache does."""
+	try:
+		discovery = session.get(f"{issuer.rstrip('/')}/.well-known/openid-configuration", timeout=10)
+		discovery.raise_for_status()
+		response = session.post(discovery.json()["token_endpoint"], timeout=10,
+		                        data={"grant_type": "client_credentials"}, auth=(client_id, client_secret))
+		if response.status_code != 200:
+			logger.error(f"The client credentials token request was refused: {response.status_code} {response.text}")
+			return None
+		return response.json()["access_token"]
+	except Exception as e:
+		logger.exception(f"Error getting a client credentials token from {issuer}: {e}")
+		return None
+
+
+# How the scripts log in to OBP (OBP_AUTH_MODE):
+#   user      (default) DirectLogin as OBP_USERNAME; the Roles are that user's Entitlements.
+#   platform  as this app itself, a Platform App: an OAuth2 client credentials token from
+#             OIDC_ISSUER for OIDC_CLIENT_ID / OIDC_CLIENT_SECRET; the Roles are Scopes of its
+#             Consumer. OBP accepts this only on endpoints whose authMode is UserOrApplication
+#             (and on records of entities whose auth_mode is): check_client_credentials.sh shows which.
+auth_mode = os.getenv('OBP_AUTH_MODE', 'user').strip().lower()
+if auth_mode not in ('user', 'platform'):
+	logger.error(f"OBP_AUTH_MODE must be user or platform, not {auth_mode!r}. Exiting now.")
+	exit(1)
+
 logger.info(f"OBP_HOSTNAME: {obp_host}")
-logger.info(f"OBP_USERNAME: {mask_credential(username)}")
-logger.info(f"OBP_PASSWORD: {mask_credential(password)}")
-logger.info(f"OBP_CONSUMER_KEY: {mask_credential(consumer_key)}")
+logger.info(f"OBP_AUTH_MODE: {auth_mode}")
+if auth_mode == 'user':
+	username = required_env('OBP_USERNAME')
+	password = required_env('OBP_PASSWORD')
+	consumer_key = required_env('OBP_CONSUMER_KEY')
+	logger.info(f"OBP_USERNAME: {mask_credential(username)}")
+	logger.info(f"OBP_PASSWORD: {mask_credential(password)}")
+	logger.info(f"OBP_CONSUMER_KEY: {mask_credential(consumer_key)}")
+	token = create_direct_login_token(username, password, consumer_key, obp_host)
+else:
+	oidc_issuer = required_env('OIDC_ISSUER')
+	client_id = required_env('OIDC_CLIENT_ID')
+	client_secret = required_env('OIDC_CLIENT_SECRET')
+	# OBP knows the app as the User it creates for the client id, so that is the name recorded as author.
+	username = client_id
+	logger.info(f"OIDC_ISSUER: {oidc_issuer}")
+	logger.info(f"OIDC_CLIENT_ID: {mask_credential(client_id)}")
+	logger.info(f"OIDC_CLIENT_SECRET: {mask_credential(client_secret)}")
+	token = create_client_credentials_token(oidc_issuer, client_id, client_secret)
 
-token = create_direct_login_token(username, password, consumer_key, obp_host)
+
+def authorization(token):
+	"""The Authorization header value for `token` in this auth mode."""
+	return f"DirectLogin token={token}" if auth_mode == 'user' else f"Bearer {token}"
 
 
-
+def require_user_mode(what):
+	"""Stop a script that only makes sense for a logged-in user when running as a Platform App."""
+	if auth_mode != 'user':
+		logger.error(f"{what} acts for the logged-in user, so it needs OBP_AUTH_MODE=user (DirectLogin): "
+		             "a Platform App has no user of its own.")
+		exit(1)

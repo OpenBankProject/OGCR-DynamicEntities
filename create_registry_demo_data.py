@@ -40,7 +40,7 @@ import sys
 
 import requests
 
-from obp_client import token as default_token, obp_host, session
+from obp_client import token as default_token, obp_host, session, authorization
 from obp_space import SPACE_ID, record_path
 from parse_minimum_fields import parse_xlsx_entities
 from create_example_data import clean_key, coerce_value, create_object, DEFAULT_SPREADSHEET
@@ -252,7 +252,7 @@ def generated(total):
 def headers(token):
     h = {"Content-Type": "application/json"}
     if token:
-        h["Authorization"] = f"DirectLogin token={token}"
+        h["Authorization"] = authorization(token)
     return h
 
 
@@ -307,7 +307,7 @@ def build(entity_name, entities, values):
 def main():
     parser = argparse.ArgumentParser(description="Create demo operators, activities, verifications and certificates for the registry endpoint.")
     parser.add_argument("file", nargs="?", default=DEFAULT_SPREADSHEET, help=f"Spreadsheet path (default: {DEFAULT_SPREADSHEET}).")
-    parser.add_argument("--token", default=default_token, help="DirectLogin token (overrides obp_client.py).")
+    parser.add_argument("--token", default=default_token, help="OBP token (overrides obp_client.py).")
     parser.add_argument("--activities", type=int, default=len(ACTIVITIES), metavar="N",
                         help=f"Total registry activities (default {len(ACTIVITIES)}). Above {len(ACTIVITIES)}, the rest are generated, with verifications and certificates.")
     args = parser.parse_args()

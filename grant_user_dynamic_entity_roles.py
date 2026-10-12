@@ -20,7 +20,7 @@ import argparse
 import re
 import sys
 
-from obp_client import obp_host, session, token
+from obp_client import obp_host, session, token, authorization
 from obp_space import ROLE_BANK_ID
 from role_groups import roles_for
 
@@ -37,7 +37,7 @@ args = parser.parse_args()
 access = args.access.upper()
 if not re.fullmatch(r"[CRUD]+", access):
 	sys.exit(f"✗ --access {args.access!r} may only contain the letters C R U D")
-H = {"Authorization": f"DirectLogin token={token}", "Content-Type": "application/json"}
+H = {"Authorization": authorization(token), "Content-Type": "application/json"}
 
 params = {"username": args.username}
 if args.provider:

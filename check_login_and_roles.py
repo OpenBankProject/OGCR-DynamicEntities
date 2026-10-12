@@ -142,6 +142,10 @@ def main():
 		help="Also print every entitlement the user holds")
 	args = parser.parse_args()
 
+	if os.getenv('OBP_AUTH_MODE', 'user').strip().lower() != 'user':
+		logger.error("✗ This checks DirectLogin and a user's Roles, so it needs OBP_AUTH_MODE=user. "
+		             "As a Platform App, run ./check_client_credentials.sh instead.")
+		return 1
 	host = os.getenv('OBP_HOSTNAME', "http://obp-api-internal-route-obp.apps-crc.testing")
 	missing_env = [k for k in ('OBP_USERNAME', 'OBP_PASSWORD', 'OBP_CONSUMER_KEY') if not os.getenv(k)]
 	if missing_env:

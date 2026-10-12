@@ -40,7 +40,7 @@ import difflib
 import sys
 from pathlib import Path
 
-from obp_client import obp_host, session, token, username
+from obp_client import obp_host, session, token, username, authorization
 
 HERE = Path(__file__).parent
 ENTITY = "obp_portal_page"
@@ -55,7 +55,7 @@ DEFAULT_TITLE = "How the OGCR components work together"
 
 
 def headers():
-	return {"Authorization": f"DirectLogin token={token}", "Content-Type": "application/json"}
+	return {"Authorization": authorization(token), "Content-Type": "application/json"}
 
 
 def refused(response, action):

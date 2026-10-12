@@ -32,7 +32,7 @@ Prerequisites on the target OBP instance:
   * If dynamic_code_requires_approval=true, a create/update is queued as a
     DynamicChangeRequest (202) and a different user must approve it before it runs.
 
-Auth is DirectLogin via obp_client.py, the same as the other scripts here.
+Auth is via obp_client.py (OBP_AUTH_MODE: DirectLogin or Platform App), the same as the other scripts here.
 """
 import argparse
 import json
@@ -43,7 +43,7 @@ from pathlib import Path
 from urllib.parse import quote, unquote
 
 
-from obp_client import token as DEFAULT_TOKEN, obp_host as DEFAULT_HOST, session
+from obp_client import token as DEFAULT_TOKEN, obp_host as DEFAULT_HOST, session, authorization
 from obp_space import SPACE_ID
 
 HERE = Path(__file__).parent
@@ -203,7 +203,7 @@ def served_url(host, doc):
 def _headers(token):
     headers = {"Content-Type": "application/json"}
     if token:
-        headers["Authorization"] = f"DirectLogin token={token}"
+        headers["Authorization"] = authorization(token)
     return headers
 
 
@@ -437,7 +437,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("command", choices=sorted(COMMANDS))
     parser.add_argument("doc", nargs="?", default="registry_activities", choices=sorted(DOCS) + [None])
-    parser.add_argument("--token", default=None, help="DirectLogin token (overrides obp_client)")
+    parser.add_argument("--token", default=None, help="OBP token (overrides obp_client)")
     parser.add_argument("--host", default=None, help="OBP base URL (overrides OBP_HOSTNAME)")
     parser.add_argument("--wait", type=int, default=0, metavar="SECONDS",
                         help="verify: keep retrying a 404 for up to SECONDS (OBP caches resource docs, 40s by default)")
@@ -446,7 +446,7 @@ def main():
     token = args.token or DEFAULT_TOKEN
     host = (args.host or DEFAULT_HOST).rstrip("/")
     if not token:
-        raise SystemExit("No DirectLogin token. Check OBP_USERNAME / OBP_PASSWORD / OBP_CONSUMER_KEY in .env")
+        raise SystemExit("No OBP token. Check the login settings for OBP_AUTH_MODE in .env")
 
     if args.command == "verify":
         return cmd_verify(args.doc, DOCS[args.doc], token, host, wait=args.wait)

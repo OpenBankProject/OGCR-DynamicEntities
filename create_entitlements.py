@@ -18,7 +18,7 @@ import sys
 
 from delete_dynamic_entities import DEFAULT_INPUT, parse_entity_names
 from get_and_delete_dynamic_entities import get_all_system_dynamic_entities
-from obp_client import token, obp_host, session
+from obp_client import token, obp_host, session, authorization, require_user_mode
 from obp_space import ROLE_BANK_ID, describe
 from role_groups import GROUP_ADMIN_ROLES
 
@@ -27,12 +27,14 @@ def add_entitlement_to_user(token, user_id, role_name, bank_id=""):
 	"""Grant `role_name` at `bank_id` to the user; returns OBP's JSON response."""
 	# v7.0.0: the older versions reject the SYS bank id with OBP-30001 Bank not found.
 	response = session.post(f"{obp_host}/obp/v7.0.0/users/{user_id}/entitlements",
-		headers={"Authorization": f"DirectLogin token={token}", "Content-Type": "application/json"},
+		headers={"Authorization": authorization(token), "Content-Type": "application/json"},
 		json={"bank_id": bank_id, "role_name": role_name})
 	if not response.ok:
 		print(response, response.text)
 	return response.json()
 
+
+require_user_mode("create_entitlements.py")
 
 entities_file = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_INPUT
 entity_names = parse_entity_names(entities_file)
@@ -40,7 +42,7 @@ print(f"Read {len(entity_names)} entities from {entities_file}")
 
 # Grant the Roles to whoever is logged in.
 response = session.get(f"{obp_host}/obp/v6.0.0/users/current",
-	headers={"Authorization": f"DirectLogin token={token}"})
+	headers={"Authorization": authorization(token)})
 response.raise_for_status()
 user_id = response.json()["user_id"]
 held = {(e.get("role_name"), e.get("bank_id", ""))

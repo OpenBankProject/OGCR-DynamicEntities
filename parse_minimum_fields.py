@@ -349,7 +349,7 @@ def main():
 	parser.add_argument("file", nargs="?", default="min_field_matrix.xlsx", help="Path to the xlsx file")
 	parser.add_argument("--create", action="store_true", help="Create parsed entities on OBP (will call management API)")
 	parser.add_argument("--update", action="store_true", help="Update existing parsed entities on OBP (will call management API)")
-	parser.add_argument("--token", default=None, help="DirectLogin token to use (overrides obp_client.token)")
+	parser.add_argument("--token", default=None, help="OBP token to use (overrides obp_client.token)")
 	parser.add_argument("--host", default=None, help="OBP host to use (overrides obp_client.obp_host)")
 	parser.add_argument("--yes", action="store_true", help="If set with --create, skip confirmation prompt")
 	parser.add_argument("--save", action="store_true", help="Save parsed entities to --output non-interactively (no prompt)")

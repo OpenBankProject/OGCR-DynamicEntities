@@ -28,7 +28,7 @@ import re
 import sys
 from collections import defaultdict
 
-from obp_client import obp_host, session, token
+from obp_client import obp_host, session, token, authorization
 
 ROLE_RE = re.compile(r"^Can(Create|Get|Update|Delete)DynamicEntityRecord_(.+)$")
 PATHS = {
@@ -43,7 +43,7 @@ parser = argparse.ArgumentParser(description="Show the dynamic entity record pat
 parser.add_argument("username", help="The user to look at (not the one logged in from .env)")
 parser.add_argument("--provider", help="Needed if the username exists at more than one provider")
 args = parser.parse_args()
-H = {"Authorization": f"DirectLogin token={token}"}
+H = {"Authorization": authorization(token)}
 
 params = {"username": args.username}
 if args.provider:

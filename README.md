@@ -36,6 +36,7 @@ Run the `.sh` wrappers: each one changes to this directory, uses `.venv/bin/pyth
 | `check_openapi_field_types.sh` / `.py` | Every field type in OBP's generated OpenAPI document against the spreadsheet. |
 | `query_indexes.sh` / `.py` | Offline: which fields the Dynamic Queries (`*_query.json`) need indexed, and why. |
 | `check_indexing.sh` / `.py` | That OBP actually uses the indexes: the prop `dynamic_entity.indexing.backend=auto`, each entity's index built, and each Dynamic Query served from them. Exits 1 on any problem. See "Indexes". |
+| `check_client_credentials.sh` / `.py` | Which endpoints the scripts use accept an application token (OAuth2 client credentials, as a Platform App) instead of a DirectLogin user: one GET per group, with the status OBP answers next to the predicted one. Needs `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`. |
 | `time_registry_query.sh` / `.py` | Calls `/registry/activities-query` anonymously `--runs` times (default 5) and logs each call's ms and number of records, plus min/median/max, to the console and `logs/time_registry_query.log`. |
 
 *Entities*
@@ -92,6 +93,17 @@ Run the `.sh` wrappers: each one changes to this directory, uses `.venv/bin/pyth
 | `fixtures.py`, `iso_3166_1_countries.py`, `sustainable_development_goals.py` | The fixed lists: countries, technologies/practices/processes and SDGs. |
 | `example_data_creation_log_helpers.py` | The optional audit log entity for `create_example_data.py --log`. |
 | `timing.py` | The `⏱` step timings. |
+
+**Logging in: user or Platform App (`OBP_AUTH_MODE`)**
+
+`obp_client.py` logs every script in one of two ways; the scripts build their `Authorization` header with its `authorization(token)`, so they work in either.
+
+| `OBP_AUTH_MODE` | Login | Roles come from | `.env` |
+|---|---|---|---|
+| `user` (default) | DirectLogin | the user's Entitlements | `OBP_USERNAME`, `OBP_PASSWORD`, `OBP_CONSUMER_KEY` |
+| `platform` | OAuth2 client credentials from OBP-OIDC, as a Platform App (like OGCR-chain-cache) | Scopes of the app's Consumer | `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` |
+
+Platform mode is prepared, not yet usable for the whole pipeline. OBP accepts an app's token only on endpoints whose authMode is `UserOrApplication`, and on the records of entities whose `auth_mode` is; elsewhere it answers 403, because it checks the Roles of the User it creates for the client id rather than the Consumer's Scopes. Today that covers the v7.0.0 entity definition endpoints (GET, POST, PUT) and public reads; not the v4/v5.1/v6 definition endpoints these scripts mostly call, Users, Groups, Role grants, Dynamic Resource Docs, banks or the Glossary, nor the registry's records, whose entities are `UserOnly`. `./check_client_credentials.sh` shows the current state. `create_entitlements.py` and `check_login_and_roles.py` act for the logged-in user and refuse to run in platform mode.
 
 **Chain entities belong to OGCR-chain-cache**
 
@@ -366,17 +378,32 @@ An entity can be opened for unauthenticated read — useful for open reference d
 
 The parser finds the column by *header text*, not position, so it can be moved and minor spelling differences (`hasPublicAccess`, `Entity Has Public Access`) still match. If the column is missing entirely — an older export — every entity simply defaults to not public.
 
-A ticked entity is created with `"hasPublicAccess": true`, which gives it an extra route:
+A ticked entity is created with `"hasPublicAccess": true`, which gives it an extra, public route (list and by id) next to the normal one. The normal route is unchanged: it still answers 401 without authentication, even for a public entity. The public route is read only, returns shared-pool rows only, and leaves out fields marked `HideFieldFromPublicAccess`; there is no public write route.
 
-| Route | Who | What |
-|---|---|---|
-| `GET /obp/dynamic-entity/public/<entity>` | anyone, **no login** | read only, shared-pool rows only |
-| `GET /obp/dynamic-entity/<entity>` | role holders | unchanged; 401 without authentication |
-| any write to `/public/` | — | 404; there is no public write route |
+Both routes exist in two forms, with the same data. The v7.0.0 form is preferred; its response wraps each record with a `metadata` object (`{"country": {...}, "metadata": {...}}`), the older form returns the bare record.
+
+| Space | Who | v7.0.0 (preferred) | Older equivalent |
+|---|---|---|---|
+| Bank | anyone, **no login** | `GET /obp/v7.0.0/banks/BANK_ID/dynamic-entities/public/ENTITY` | `GET /obp/dynamic-entity/banks/BANK_ID/public/ENTITY` |
+| Bank | role holders | `GET /obp/v7.0.0/banks/BANK_ID/dynamic-entities/ENTITY` | `GET /obp/dynamic-entity/banks/BANK_ID/ENTITY` |
+| System | anyone, **no login** | `GET /obp/v7.0.0/banks/SYS/dynamic-entities/public/ENTITY` | `GET /obp/dynamic-entity/public/ENTITY` |
+| System | role holders | `GET /obp/v7.0.0/banks/SYS/dynamic-entities/ENTITY` | `GET /obp/dynamic-entity/ENTITY` |
+
+Add `/ENTITY_ID` to any of these for a single record. With the default space, the country list is public at `/obp/v7.0.0/banks/ogcr/dynamic-entities/public/country`.
+
+The bank part comes first, and `public` goes immediately before the entity name. Other orders fail in ways that look like data or permission problems:
+
+| Wrong path | Answer |
+|---|---|
+| `/obp/dynamic-entity/public/banks/BANK_ID/ENTITY` | 404, the same as "entity missing" or "public access off" |
+| `/obp/v7.0.0/banks/BANK_ID/public/dynamic-entities/ENTITY` | 404 |
+| `/obp/v7.0.0/banks/BANK_ID/dynamic-entities/ENTITY/public` | 401, because `public` is taken as a record id on the authenticated route |
+
+The scripts build these paths with `obp_space.record_path(entity, public=True)`. The public endpoints are listed, with no Roles, in the resource docs (`/obp/v7.0.0/resource-docs/v7.0.0/obp`).
 
 The flag is only sent when it is switched on, so an OBP build that predates it is unaffected. See the `Dynamic-Entity-Access-Model` glossary entry on your OBP instance for the full access model (`hasPersonalEntity`, `hasCommunityAccess`, `useRowLevelAccess`, `authMode` and field-level roles); this flag is its "curated reference data" pattern — role holders maintain the data, everyone reads it.
 
-Currently ticked: `country`, `technologies_practices_processes`.
+Currently ticked: `activity`, `activity_media`, `activity_on_chain`, `activity_technologies_practices_processes`, `activity_verification`, `certificate_of_compliance`, `certification_body`, `certification_scheme`, `co_benefit`, `country`, `operator`, `sustainable_development_goal`, `sustainable_development_goals`, `technologies_practices_processes`.
 
 **Fixtures (controlled vocabularies)**
 

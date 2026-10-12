@@ -20,7 +20,7 @@ import argparse
 import json
 import sys
 
-from obp_client import obp_host, session, token
+from obp_client import obp_host, session, token, authorization
 from obp_space import SPACE_ID, describe
 
 
@@ -51,7 +51,7 @@ def main():
 			parser.error(f"{change!r} is not FIELD=VALUE")
 		changes[field] = parse_value(value)
 
-	headers = {"Authorization": f"DirectLogin token={token}", "Content-Type": "application/json"}
+	headers = {"Authorization": authorization(token), "Content-Type": "application/json"}
 	url = record_url(args.entity, args.record_id)
 	print(f"{args.entity} {args.record_id} at {obp_host}, {describe()}")
 	response = session.get(url, headers=headers, timeout=60)

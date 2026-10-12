@@ -24,7 +24,7 @@ import time
 from pathlib import Path
 
 from dynamic_resource_docs import DOCS
-from obp_client import obp_host, session, token
+from obp_client import obp_host, session, token, authorization
 from obp_space import SPACE_ID
 
 LOG_FILE = Path(__file__).parent / "logs" / "time_registry_query.log"
@@ -43,7 +43,7 @@ def main():
 	args = parser.parse_args()
 
 	url = query_url() + (f"?{args.params}" if args.params else "")
-	headers = {"Authorization": f"DirectLogin token={token}"} if args.auth else {}
+	headers = {"Authorization": authorization(token)} if args.auth else {}
 	who = "logged in" if args.auth else "anonymous"
 	LOG_FILE.parent.mkdir(exist_ok=True)
 

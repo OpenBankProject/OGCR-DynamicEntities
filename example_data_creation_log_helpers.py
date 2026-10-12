@@ -22,7 +22,7 @@ import datetime
 import logging
 
 
-from obp_client import obp_host, session
+from obp_client import obp_host, session, authorization
 from obp_space import record_path
 from obp_dynamic_api import (
     create_system_dynamic_entity,
@@ -167,7 +167,7 @@ def log_event(
     url = f"{base_url}{record_path(LOG_ENTITY_NAME)}"
     headers = {"Content-Type": "application/json"}
     if token:
-        headers["Authorization"] = f"DirectLogin token={token}"
+        headers["Authorization"] = authorization(token)
     try:
         resp = session.post(url, headers=headers, json=record)
         resp.raise_for_status()

@@ -23,7 +23,7 @@ import argparse
 import sys
 from collections import defaultdict
 
-from obp_client import obp_host, session, token
+from obp_client import obp_host, session, token, authorization
 from create_role_groups import direct_roles, get_user_memberships, roles_by_group
 from obp_space import ROLE_BANK_ID
 from role_groups import ACCESS_ORDER, ROLE_PREFIX_BY_LETTER
@@ -45,7 +45,7 @@ params = {"username": args.username}
 if args.provider:
 	params["provider"] = args.provider
 response = session.get(f"{obp_host}/obp/v6.0.0/users", params=params,
-	headers={"Authorization": f"DirectLogin token={token}"}, timeout=30)
+	headers={"Authorization": authorization(token)}, timeout=30)
 if not response.ok:
 	sys.exit(f"✗ {response.status_code} {response.text}")
 users = response.json().get("users", [])

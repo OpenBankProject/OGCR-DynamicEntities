@@ -1,6 +1,6 @@
 import requests
 import logging
-from obp_client import token, obp_host, session
+from obp_client import token, obp_host, session, authorization
 from obp_space import management_path, record_path
 
 # Configure logging
@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 BASE_URL = obp_host  # Replace with your OBP instance URL
-DIRECTLOGIN_TOKEN = token  # Optional: Replace with your DirectLogin token
+DIRECTLOGIN_TOKEN = token  # Optional: replace with another OBP token
 
 
 
@@ -17,7 +17,7 @@ def get_all_system_dynamic_entities(token=None):
 	Get all system-level dynamic entities in OBP.
 
 	Args:
-		token (str, optional): DirectLogin authentication token
+		token (str, optional): OBP token (see obp_client.authorization)
 
 	Returns:
 		dict: The API response
@@ -30,7 +30,7 @@ def get_all_system_dynamic_entities(token=None):
 
 	# Add authentication if token is provided
 	if token:
-		headers["Authorization"] = f"DirectLogin token={token}"
+		headers["Authorization"] = authorization(token)
 
 	try:
 		response = session.get(url, headers=headers)
@@ -47,7 +47,7 @@ def get_all_objects_for_system_dynamic_entity(entity_name, token=None):
 	Get all system-level dynamic entities in OBP.
 
 	Args:
-		token (str, optional): DirectLogin authentication token
+		token (str, optional): OBP token (see obp_client.authorization)
 
 	Returns:
 		dict: The API response, or None if entity doesn't exist (404)
@@ -60,7 +60,7 @@ def get_all_objects_for_system_dynamic_entity(entity_name, token=None):
 
 	# Add authentication if token is provided
 	if token:
-		headers["Authorization"] = f"DirectLogin token={token}"
+		headers["Authorization"] = authorization(token)
 
 	try:
 		response = session.get(url, headers=headers)
@@ -90,7 +90,7 @@ def delete_object_for_system_dynamic_entity(entity_name, object_id, token=None):
 
 	# Add authentication if token is provided
 	if token:
-		headers["Authorization"] = f"DirectLogin token={token}"
+		headers["Authorization"] = authorization(token)
 
 	try:
 		response = session.delete(url, headers=headers)
@@ -112,7 +112,7 @@ def delete_system_dynamic_entity(entity_id, token=None):
 
 	# Add authentication if token is provided
 	if token:
-		headers["Authorization"] = f"DirectLogin token={token}"
+		headers["Authorization"] = authorization(token)
 
 	try:
 		response = session.delete(url, headers=headers)

@@ -47,7 +47,7 @@ import sys
 from collections import defaultdict
 
 from get_and_delete_dynamic_entities import get_all_system_dynamic_entities
-from obp_client import token, obp_host, session
+from obp_client import token, obp_host, session, authorization
 from obp_space import ROLE_BANK_ID, describe
 from role_groups import MEMBER_ROLES, group_roles, parse_role_groups
 
@@ -59,7 +59,7 @@ SYNC_USERS_URL = f"{obp_host}/obp/v7.0.0/management/users"
 
 
 def headers():
-	return {"Authorization": f"DirectLogin token={token}", "Content-Type": "application/json"}
+	return {"Authorization": authorization(token), "Content-Type": "application/json"}
 
 
 def get_groups_at_space():
@@ -227,7 +227,7 @@ def main():
 		print(f"No Role Group columns found from column S of {args.file}. Nothing to do.")
 		return 0
 	if not token:
-		print("✗ DirectLogin failed")
+		print("✗ Login to OBP failed")
 		return 1
 
 	print(f"{tag}{len(groups)} Role Group(s) in {args.file}, for the entities at {describe()}, "

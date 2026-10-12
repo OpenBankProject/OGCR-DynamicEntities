@@ -133,7 +133,7 @@ def main():
 		print(f"✗ No entities read from {args.file}")
 		return 2
 	if not token:
-		print("✗ DirectLogin failed")
+		print("✗ Login to OBP failed")
 		return 2
 	bank_id = SPACE_ID or "SYS"
 	try:

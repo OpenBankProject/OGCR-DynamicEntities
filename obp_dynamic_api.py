@@ -11,7 +11,7 @@ import requests
 import logging
 import json
 import re
-from obp_client import token as DEFAULT_TOKEN, obp_host as DEFAULT_HOST, session
+from obp_client import token as DEFAULT_TOKEN, obp_host as DEFAULT_HOST, session, authorization
 from obp_space import management_path
 from query_indexes import QUERY_INDEXED_FIELDS
 
@@ -127,7 +127,7 @@ def list_system_dynamic_entities(token=None, base_url=None):
     url = f"{base_url}{management_path('v5.1.0')}"
     headers = {"Content-Type": "application/json"}
     if token:
-        headers["Authorization"] = f"DirectLogin token={token}"
+        headers["Authorization"] = authorization(token)
     resp = session.get(url, headers=headers)
     resp.raise_for_status()
     return resp.json()
@@ -146,7 +146,7 @@ def create_system_dynamic_entity(entity_definition, token=None, base_url=None):
 
     headers = {"Content-Type": "application/json"}
     if token:
-        headers["Authorization"] = f"DirectLogin token={token}"
+        headers["Authorization"] = authorization(token)
 
     logger.debug("Creating system dynamic entity: %s", json.dumps(entity_definition, indent=2))
 
@@ -178,7 +178,7 @@ def update_system_dynamic_entity(dynamic_entity_id, entity_definition, token=Non
 
     headers = {"Content-Type": "application/json"}
     if token:
-        headers["Authorization"] = f"DirectLogin token={token}"
+        headers["Authorization"] = authorization(token)
 
     logger.debug("Updating system dynamic entity %s: %s", dynamic_entity_id, json.dumps(entity_definition, indent=2))
 

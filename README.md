@@ -40,6 +40,78 @@ Each run starts with a line naming its target and host, e.g. `=== PROD (https://
 
 `BOTH` does everything twice: `recreate_dynamic_entities.sh` asks for confirmation once per target, and Role grants send their emails once per instance.
 
+**Commands**
+
+Every command and its options. `[...]` is optional, `A|B` is one or the other, `MATRIX` is the spreadsheet (default `min_field_matrix.xlsx`) and `ENTITIES_FILE` the parsed entity list (default `entities_output.txt`).
+
+Every `.sh` below, except `check_min_field_matrix.sh` (offline), also takes `--target=LOCAL|PROD|BOTH` (default `LOCAL`), anywhere on the line; `OBP_TARGET=...` in front of the command does the same. A `.py` run directly takes `OBP_TARGET=LOCAL|PROD` in front of it, not `BOTH`. See "LOCAL and PROD".
+
+```bash
+# The whole pipeline
+./recreate_dynamic_entities.sh [MATRIX] [--yes] [--only] [--target=T]
+./dry_run_recreate_dynamic_entities.sh [MATRIX] [--only] [--target=T]
+./update_dynamic_entities.sh [MATRIX] [--yes] [--resave [ENTITY ...]] [--no-docs] [--target=T]
+
+# Checks (read-only)
+./check_min_field_matrix.sh [MATRIX] [--strict]
+./check_login_and_roles.sh [ENTITIES_FILE] [--no-entities] [--role ROLE[@BANK_ID] ...] [--list] [--target=T]
+./diff_entities.sh [MATRIX] [--bank-id BANK_ID] [--structure-only] [--target=T]
+./check_openapi_field_types.sh [MATRIX] [--target=T]
+./query_indexes.sh [--target=T]
+./check_indexing.sh [--wait SECONDS] [--target=T]
+./check_client_credentials.sh [--entity NAME] [--target=T]
+./time_registry_query.sh [--runs N] [--params "QUERY_STRING"] [--auth] [--target=T]
+
+# Entities
+./create_space_bank.sh [--full-name "NAME"] [--target=T]
+OBP_TARGET=T python3 parse_minimum_fields.py [MATRIX] [--save [--output FILE]] [--create | --update] [--yes] [--token TOKEN] [--host URL]
+OBP_TARGET=T python3 delete_dynamic_entities.py [ENTITIES_FILE] [--yes] [--token TOKEN]
+OBP_TARGET=T python3 delete_all_dynamic_entities.py
+./patch_record.sh ENTITY RECORD_ID FIELD=VALUE [FIELD=VALUE ...] [--yes] [--target=T]
+
+# Data
+OBP_TARGET=T python3 create_example_data.py [MATRIX] [--log] [--fixtures-only] [--token TOKEN]
+./create_registry_demo_data.sh [MATRIX] [--activities N] [--token TOKEN] [--target=T]
+
+# Roles, groups and users
+./create_entitlements.sh [ENTITIES_FILE] [--target=T]
+./create_role_groups.sh [MATRIX] [--user USERNAME [--provider PROVIDER]] [--dry-run] [--target=T]
+./add_users_to_groups.sh [FILE] [--sheet NAME] [--user USERNAME] [--remove-unticked] [--dry-run] [--target=T]
+./sync_user_group_permissions.sh [USERNAME | --user USERNAME] [FILE] [--sheet NAME] [--dry-run] [--target=T]
+./show_user_dynamic_entity_roles.sh USERNAME [--bank-id BANK_ID] [--provider PROVIDER] [--by-entity] [--target=T]
+./show_user_dynamic_entity_paths.sh USERNAME [--provider PROVIDER] [--target=T]
+./grant_user_dynamic_entity_roles.sh USERNAME --entity NAME [--entity NAME ...] [--access CRUD] [--bank-id BANK_ID] [--provider PROVIDER] [--dry-run] [--target=T]
+
+# Dynamic Resource Docs
+./recreate_dynamic_resource_docs.sh [DOC ...] [--yes] [--dry-run] [--target=T]
+OBP_TARGET=T python3 dynamic_resource_docs.py compile|verify|list|create|update|delete [DOC] [--wait SECONDS] [--token TOKEN] [--host URL]
+#   DOC: registry_activities (default), registry_activities_query, registry_activity_query,
+#        registry_activity_practices_query, registry_activity_sdgs_query, registry_activity_certificates_query
+#   --wait: verify only, retries a 404 while OBP's cache catches up
+
+# Domain API
+./domain_api.sh list|create|update|delete [--base-path PATH] [--version X.Y.Z] [--title "TITLE"] [--description "TEXT"] [--target=T]
+#   --base-path defaults to crcf/<space>/v1, e.g. crcf/ogcr/v1; create's --version defaults to 1.0.0
+
+# Pages
+./publish_architecture_page.sh [--source FILE] [--slug SLUG] [--title "TITLE"] [--kind page|app] [--yes] [--overwrite] [--pull] [--publish | --draft] [--target=T]
+./publish_architecture_glossary_item.sh [--source FILE] [--title "TITLE"] [--yes] [--overwrite] [--pull] [--target=T]
+./publish_smart_contracts_glossary_item.sh [--yes] [--overwrite] [--pull] [--target=T]
+```
+
+`T` is `LOCAL`, `PROD` or `BOTH` for a `.sh`, and `LOCAL` or `PROD` for a `.py`. `--host` and `--token`, where a script has them, override the target's host or login for that one run.
+
+Examples:
+
+```bash
+./check_login_and_roles.sh --target=BOTH                 # can the scripts log in on both, with the Roles they need?
+./diff_entities.sh --target=PROD                         # how prod's entities differ from the spreadsheet
+./domain_api.sh create                                   # crcf/ogcr/v1 on LOCAL
+./domain_api.sh create --target=PROD                     # ... then on PROD
+./update_dynamic_entities.sh --yes --target=BOTH         # LOCAL first, PROD only if LOCAL succeeded
+OBP_TARGET=PROD python3 delete_dynamic_entities.py --yes
+```
+
 **Scripts index**
 
 Run the `.sh` wrappers: each one changes to this directory, uses `.venv/bin/python` when it exists, and passes its arguments to the `.py` of the same name. Host, credentials and space come from `.env` (see Setup), for LOCAL unless `--target=PROD` or `--target=BOTH` (see "LOCAL and PROD"). "Writes" says whether a script changes anything on OBP.

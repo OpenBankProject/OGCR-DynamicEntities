@@ -30,7 +30,7 @@ The OGCR registry records carbon activities, parcels, verifications and certific
               │ polls for verified records          | writes *_on_chain records
               │ (reads only)                        |
        ogcr-tokenizer --mints--> OGCR chain <--reads-- OGCR-Chain-Cache
-                                (chain id 2025,
+                                (chain id 20253,
                                  OGCR-Smart-Contracts)
 ```
 Arrows point from the caller to the service it calls.
@@ -41,7 +41,9 @@ Arrows point from the caller to the service it calls.
 
 **OGCR-DynamicEntities**: scripts that apply the schema definition spreadsheet to OBP-API. They create the entities (fields, types, references, indexes), the Role Groups and the Dynamic Queries, and check that OBP matches the spreadsheet.
 
-**OGCR-Smart-Contracts**: Solidity contracts for chain 2025. `ParcelNFT`, `ActivityNFT` and `CertificationNFT` hold a URL and hash of the registry record they attest to. Each `CarbonCreditBatchNFT` owns an ERC-6551 account holding its `CarbonCredit` (ERC-20) balance.
+**OGCR-Smart-Contracts**: Solidity contracts for chain 20253. `ParcelNFT`, `ActivityNFT` and `CertificationNFT` (ERC-721) each carry a snapshot of the registry record they attest to, a URL back to it and a hash of it. Each `CarbonCreditBatchNFT` owns an ERC-6551 account holding its `CarbonCredit` (ERC-20) balance.
+
+<!--OBP-GLOSSARY:FULL:OGCR Smart Contracts-->
 
 **ogcr-tokenizer**: polls OBP and mints a token to the operator's wallet when a record reaches a qualifying state (table below). Each token is minted exactly once, and a token waits until the tokens it depends on exist. It only reads from OBP and reports its health at `/healthz`.
 
@@ -61,10 +63,10 @@ Arrows point from the caller to the service it calls.
 
 | Token | Minted when | Also required |
 |---|---|---|
-| `ParcelNFT` | `parcel_owner_verification` is `verified` | parcel, activity_parcel_verification, activity, operator |
-| `ActivityNFT` | `activity_verification` is `verified` | activity, operator |
-| `CertificationNFT` | a `certificate_of_compliance` is created | ActivityNFT, activity, operator |
-| `CarbonCreditBatchNFT` + `CarbonCredit` | `activity_monitoring_period_verification` is `verified` | ActivityNFT, certificate_of_compliance, certification_scheme, certification_body |
+| `ParcelNFT` | `parcel_owner_verification` is `verified` | parcel, parcel_activity, activity, operator |
+| `ActivityNFT` | `activity_verification` is `verified` and a `certificate_of_compliance` exists | activity, operator |
+| `CertificationNFT` | a `certificate_of_compliance` is created, including each re-certification | ActivityNFT, activity, operator, certification_scheme, certification_body |
+| `CarbonCreditBatchNFT` + `CarbonCredit` | `activity_monitoring_period_verification` is `verified`; one batch for each benefit field with a value | ActivityNFT, certificate_of_compliance, certification_scheme, certification_body |
 
 ### Design rules
 

@@ -30,6 +30,14 @@ SPACE_ID = os.getenv("OBP_ENTITY_SPACE_ID", DEFAULT_SPACE_ID).strip()
 # SYS for system level entities (not the empty string).
 ROLE_BANK_ID = SPACE_ID or "SYS"
 
+# The Roles domain_api.py needs to manage the space's Domain API, granted at ROLE_BANK_ID.
+DOMAIN_API_ROLE_NAMES = [
+	"CanCreateDomainApi",
+	"CanDeleteDomainApi",
+	"CanGetDomainApis",
+	"CanUpdateDomainApi",
+]
+
 
 def describe():
 	"""Human readable name of where the entities live, for log messages."""

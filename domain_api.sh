@@ -8,9 +8,10 @@
 #
 # Usage:
 #   ./domain_api.sh list
-#   ./domain_api.sh create --title "..." [--base-path crcf/ogcr/v1] [--version 1.0.0] [--description ...]
-#   ./domain_api.sh update [--version 1.1.0] [--title ...] [--description ...]
+#   ./domain_api.sh create --title "..." [--base-path crcf/ogcr/v1] [--version 1.0.0] [--description ...] [--publicly-discoverable true|false]
+#   ./domain_api.sh update [--version 1.1.0] [--title ...] [--description ...] [--publicly-discoverable true|false]
 #   ./domain_api.sh delete
+#   ./domain_api.sh verify        # is the base path served?
 #
 # Notes:
 #   - Credentials/host/OBP_ENTITY_SPACE_ID come from your .env.

@@ -1,6 +1,6 @@
 """Grant the logged in user the Roles for the OGCR dynamic entities.
 
-Grants the entity DEFINITION Roles, the Roles for managing the Role Groups
+Grants the entity DEFINITION Roles, the Domain API Roles, the Roles for managing the Role Groups
 and adding users to them (see role_groups.py), plus the RECORD Roles for every
 `Entity: <name>` in the parsed entities file (produced by
 `parse_minimum_fields.py --save`), all at the bank id of the entities' space
@@ -19,7 +19,7 @@ import sys
 from delete_dynamic_entities import DEFAULT_INPUT, parse_entity_names
 from get_and_delete_dynamic_entities import get_all_system_dynamic_entities
 from obp_client import token, obp_host, session, authorization, require_user_mode
-from obp_space import ROLE_BANK_ID, describe
+from obp_space import DOMAIN_API_ROLE_NAMES, ROLE_BANK_ID, describe
 from role_groups import GROUP_ADMIN_ROLES
 
 
@@ -68,6 +68,8 @@ role_names = [
 	]
 # Every (role_name, bank_id) wanted, in order: definition Roles, group Roles, then record Roles.
 wanted = [(m, ROLE_BANK_ID) for m in meta_role_names]
+# The Roles domain_api.py needs, also at the bank id of the space.
+wanted += [(d, ROLE_BANK_ID) for d in DOMAIN_API_ROLE_NAMES]
 # The Roles create_role_groups.py and add_users_to_groups.py need (steps 4 and 5 of
 # recreate_dynamic_entities.sh). Some are system level, so each carries its own bank id.
 wanted += GROUP_ADMIN_ROLES

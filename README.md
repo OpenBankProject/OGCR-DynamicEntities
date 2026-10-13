@@ -90,14 +90,17 @@ OBP_TARGET=T python3 dynamic_resource_docs.py compile|verify|list|create|update|
 #   --wait: verify only, retries a 404 while OBP's cache catches up
 
 # Domain API
-./domain_api.sh list|create|update|delete [--base-path PATH] [--version X.Y.Z] [--title "TITLE"] [--description "TEXT"] [--target=T]
+./domain_api.sh list|create|update|delete|verify [--base-path PATH] [--version X.Y.Z] [--title "TITLE"] [--description "TEXT"] [--wait SECONDS] [--target=T]
 #   create needs --title (1 to 255 characters); --description is optional, --version defaults to 1.0.0
 #   --base-path defaults to crcf/<space>/v1, e.g. crcf/ogcr/v1
+#   create, update and verify then check <host>/<base path>/openapi.json answers 200 without login
+#   (delete, that it no longer does), retrying for --wait seconds (default 15); exit 1 if not
 
 # Pages
 ./publish_architecture_page.sh [--source FILE] [--slug SLUG] [--title "TITLE"] [--kind page|app] [--yes] [--overwrite] [--pull] [--publish | --draft] [--target=T]
 ./publish_architecture_glossary_item.sh [--source FILE] [--title "TITLE"] [--yes] [--overwrite] [--pull] [--target=T]
 ./publish_smart_contracts_glossary_item.sh [--yes] [--overwrite] [--pull] [--target=T]
+./publish_smart_contracts_page.sh [--yes] [--overwrite] [--pull] [--publish | --draft] [--target=T]
 ```
 
 `T` is `LOCAL`, `PROD` or `BOTH` for a `.sh`, and `LOCAL` or `PROD` for a `.py`. `--host` and `--token`, where a script has them, override the target's host or login for that one run.
@@ -177,7 +180,7 @@ Run the `.sh` wrappers: each one changes to this directory, uses `.venv/bin/pyth
 
 | Script | What it does | Writes |
 |---|---|---|
-| `domain_api.sh` / `.py` | `list`, `create`, `update` or `delete` the space's Domain API, which serves its entities and Dynamic Resource Docs under a base path of its own (default `crcf/<space>/v1`, so `/crcf/ogcr/v1/public/country` answers what `/obp/v7.0.0/banks/ogcr/dynamic-entities/public/country` does, with the same authentication and Roles; `/crcf/ogcr/v1/openapi.yaml` is its OpenAPI document). `--base-path`, `--version`, `--title`, `--description`. See the `Domain APIs` glossary entry on your OBP instance. | yes, except `list` |
+| `domain_api.sh` / `.py` | `list`, `create`, `update`, `delete` or `verify` the space's Domain API, which serves its entities and Dynamic Resource Docs under a base path of its own (default `crcf/<space>/v1`, so `/crcf/ogcr/v1/public/country` answers what `/obp/v7.0.0/banks/ogcr/dynamic-entities/public/country` does, with the same authentication and Roles; `/crcf/ogcr/v1/openapi.yaml` is its OpenAPI document). `--base-path`, `--version`, `--title`, `--description`. See the `Domain APIs` glossary entry on your OBP instance. | yes, except `list` |
 
 *Pages*
 
@@ -186,6 +189,7 @@ Run the `.sh` wrappers: each one changes to this directory, uses `.venv/bin/pyth
 | `publish_architecture_page.sh` / `.py` | Publishes `architecture_page.html` (how the components work together) as an App Studio page, the system level `obp_portal_page` record shown on the Portal at `/pages/ogcr-architecture`. New pages are drafts unless `--publish`. If the page was edited in App Studio, shows the diff and leaves it alone: `--pull` saves those edits into the file, `--overwrite` replaces them. With `--kind app --source architecture_glossary_app.html --slug ogcr-architecture-glossary` it publishes the App that shows the Glossary Item below. | with `--yes` |
 | `publish_architecture_glossary_item.sh` / `.py` | Publishes `architecture_glossary_item.md` (the same overview, in Markdown) as the Dynamic Glossary Item "OGCR Architecture", which other descriptions can embed with `<!--OBP-GLOSSARY:FULL:OGCR Architecture-->`. Same `--pull` / `--overwrite` handling of edits made on OBP. | with `--yes` |
 | `publish_smart_contracts_glossary_item.sh` | Publishes `../OGCR-Smart-Contracts/docs/glossary_item.md` (the token contracts: what each token stores, batches and their accounts, who can mint) as the Dynamic Glossary Item "OGCR Smart Contracts", using `publish_architecture_glossary_item.py`. The text lives with the contracts so it changes with them. "OGCR Architecture" embeds it, so publish this one first. Set `OGCR_SMART_CONTRACTS_DIR` if the contracts repo is not next to this one. `--pull` saves edits made on OBP into the contracts repo's file. | with `--yes` |
+| `publish_smart_contracts_page.sh` | Publishes `smart_contracts_glossary_app.html` as the App `/pages/ogcr-smart-contracts`, which shows only the Glossary Item "OGCR Smart Contracts" (publish that first), using `publish_architecture_page.py`. A copy of `architecture_glossary_app.html` with the other title. New pages are drafts unless `--publish`; same `--pull` / `--overwrite` handling of App Studio edits. | with `--yes` |
 
 *Modules used by the scripts (not run directly)*
 

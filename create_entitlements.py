@@ -66,7 +66,7 @@ role_names = [
 	"CanGetDynamicEntityRecord_",
 	"CanUpdateDynamicEntityRecord_"
 	]
-# Every (role_name, bank_id) wanted, in order: definition Roles, group Roles, then record Roles.
+# The Roles wanted before the entities can be looked at: definition Roles, Domain API Roles, group Roles.
 wanted = [(m, ROLE_BANK_ID) for m in meta_role_names]
 # The Roles domain_api.py needs, also at the bank id of the space.
 wanted += [(d, ROLE_BANK_ID) for d in DOMAIN_API_ROLE_NAMES]
@@ -74,32 +74,49 @@ wanted += [(d, ROLE_BANK_ID) for d in DOMAIN_API_ROLE_NAMES]
 # recreate_dynamic_entities.sh). Some are system level, so each carries its own bank id.
 wanted += GROUP_ADMIN_ROLES
 
+failed = []
+granted_count = 0
+
+
+def grant_missing(pairs):
+	"""Grant each (role_name, bank_id) the user doesn't hold yet; failures are collected in `failed`."""
+	global granted_count
+	for role_name, bank_id in pairs:
+		if (role_name, bank_id) in held:
+			continue
+		where = f" @ {bank_id}" if bank_id else ""
+		try:
+			result = add_entitlement_to_user(
+				token=token,
+				user_id=user_id,
+				role_name=role_name,
+				bank_id=bank_id)
+		except Exception as e:  # e.g. connection error, or a response that is not JSON
+			print(f"  {e}")
+			result = None
+		if isinstance(result, dict) and result.get("entitlement_id"):
+			print(f"  ✓ granted {role_name}{where}")
+			held.add((role_name, bank_id))
+			granted_count += 1
+		else:
+			failed.append(f"{role_name}{where}")
+			print(f"  ✗ could not grant {role_name}{where}")
+
+
+# These first: listing the entities below needs CanGetDynamicEntityDefinitions, which a new user
+# (e.g. on a fresh LOCAL) only gets here.
+grant_missing(wanted)
+
 existing = get_all_system_dynamic_entities(token=token)  # raises if OBP cannot list them
 existing_names = {e.get("entity_name") for e in existing.get("dynamic_entities", [])}
 skipped = [name for name in entity_names if name not in existing_names]
 for name in skipped:
 	print(f"skipping {name}: entity not at {describe()} on OBP yet")
-wanted += [(r + name, ROLE_BANK_ID) for name in entity_names if name not in skipped for r in role_names]
+record_roles = [(r + name, ROLE_BANK_ID) for name in entity_names if name not in skipped for r in role_names]
+grant_missing(record_roles)
 
-missing = [(r, b) for r, b in wanted if (r, b) not in held]
-print(f"{len(wanted) - len(missing)} of {len(wanted)} Roles already held; granting {len(missing)}")
-failed = []
-for role_name, bank_id in missing:
-	where = f" @ {bank_id}" if bank_id else ""
-	try:
-		result = add_entitlement_to_user(
-			token=token,
-			user_id=user_id,
-			role_name=role_name,
-			bank_id=bank_id)
-	except Exception as e:  # e.g. connection error, or a response that is not JSON
-		print(f"  {e}")
-		result = None
-	if isinstance(result, dict) and result.get("entitlement_id"):
-		print(f"  ✓ granted {role_name}{where}")
-	else:
-		failed.append(f"{role_name}{where}")
-		print(f"  ✗ could not grant {role_name}{where}")
+total = len(wanted) + len(record_roles)
+print(f"{total - granted_count - len(failed)} of {total} Roles already held; granted {granted_count}")
 
 if skipped:
 	print(f"Skipped {len(skipped)} of {len(entity_names)} entities not on OBP yet; "

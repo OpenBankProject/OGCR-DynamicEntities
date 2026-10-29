@@ -1,11 +1,14 @@
 Dynamic Entities — Usage
 
 **Setup**
-- **Python:** 3.8+ recommended. Install dependencies:
+- **Python:** 3.8+ recommended. Create the project virtualenv (`.venv`) and install the dependencies into it:
 
 ```bash
-pip install -r requirements.txt
+./setup_venv.sh            # once after cloning; safe to re-run
+./setup_venv.sh --fresh    # delete .venv and start again
 ```
+
+The `.sh` wrappers use `.venv/bin/python` when it exists; run a `.py` directly with `.venv/bin/python`, or `source .venv/bin/activate` first. On Debian / Ubuntu, creating a virtualenv needs the `python3.X-venv` package; the script names the one to install if it's missing. `requirements.txt` pins `numpy<2`, which has no wheels for Python 3.13 and newer, so on those the script installs numpy 2 and pandas 2.3.3+ instead (the scripts only use numpy through pandas).
 
 - **Environment:** create a `.env` file or export the following environment variables used by `obp_client.py`:
   - **OBP_USERNAME:** OBP username

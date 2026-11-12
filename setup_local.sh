@@ -11,7 +11,7 @@
 #      Domain API and group Roles (create_entitlements.sh).
 #   5. Check login and those Roles (check_login_and_roles.sh --no-entities). The record
 #      Roles can't be checked yet: OBP grants them to whoever creates an entity, in step 6.
-#   6. Recreate the entities, example data, Role Groups and resource docs
+#   6. Recreate the entities, example data, Role Groups, resource docs and Glossary Items
 #      (recreate_dynamic_entities.sh, which asks for confirmation unless --yes), then
 #      grant any record Roles still missing and check all the Roles. The chain
 #      entities (activity_on_chain, ...) are created inside that run, right after the
@@ -151,6 +151,10 @@ print(", ".join(n for n, d in DOCS.items() if set(entities_read(d)) & chain) or 
 else
   echo
   echo "Skipping the recreate (--no-recreate). Run ./recreate_dynamic_entities.sh when ready."
+  step "STEP 6: Glossary Items"
+  # The recreate publishes them; without it, publish them here so OGCR-App's Help page works.
+  ./publish_smart_contracts_glossary_item.sh --yes || echo "✗ The Smart Contracts Glossary Item was not published; see above." >&2
+  ./publish_architecture_glossary_item.sh --yes || echo "✗ The Architecture Glossary Item was not published; see above." >&2
 fi
 
 echo

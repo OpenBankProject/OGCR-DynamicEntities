@@ -128,7 +128,7 @@ Run the `.sh` wrappers: each one changes to this directory, uses `.venv/bin/pyth
 
 | Script | What it does | Writes |
 |---|---|---|
-| `recreate_dynamic_entities.sh` | Deletes and recreates the entities from the spreadsheet, then example data, registry demo data, an index check, Role Groups, users and resource docs. Asks first; `--yes` skips, `--only` stops after the data. Logs to `logs/`. | yes |
+| `recreate_dynamic_entities.sh` | Deletes and recreates the entities from the spreadsheet, then example data, registry demo data, an index check, Role Groups, users, resource docs and the Glossary Items. Asks first; `--yes` skips, `--only` stops after the data. Logs to `logs/`. | yes |
 | `dry_run_recreate_dynamic_entities.sh` / `.py` | Says what `recreate_dynamic_entities.sh` would do. | no |
 | `update_dynamic_entities.sh` / `.py` | Brings the definitions on OBP up to date with the spreadsheet in place, keeping records and Role grants. Reports only, unless `--yes`. `--resave` also saves unchanged entities again, so OBP builds their indexes. Then creates or updates the Dynamic Resource Docs (`dynamic_resource_docs.py`) that are missing or differ; `--no-docs` skips them. | with `--yes` |
 
@@ -322,10 +322,10 @@ The output lists only the problems actually found (`ERRORS FOUND` / `WARNINGS FO
 
 `recreate_dynamic_entities.sh` itself starts by showing the host, the space (`OBP_ENTITY_SPACE_ID`) and the sheet, and asks you to type `yes` before it changes anything. Pass `--yes` to skip the question in automation; without a terminal and without `--yes` it stops.
 
-After the entities and example data, it also runs `create_role_groups.py` (step 4), `add_users_to_groups.py` (step 5, only if `DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx` exists) and finally `recreate_dynamic_resource_docs.sh` (step 6); see "Role Groups" below. A failure in step 4 stops the run. A user who can't be added in step 5 (e.g. not on this OBP), or a resource doc that can't be recreated in step 6, is reported, the rest still run, and the script exits 1 at the end. With `OGCR_CHAIN_SETUP` set to OGCR-chain-cache's `scripts/setup-entities.sh`, the chain entities are created right after the sheet's (step 2b), before the index check and the docs that join them; `setup_local.sh` sets it when OGCR-chain-cache is cloned next to this repo, and otherwise says which docs will be skipped. Pass `--only` to recreate only the entities and skip those three steps:
+After the entities and example data, it also runs `create_role_groups.py` (step 4), `add_users_to_groups.py` (step 5, only if `DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx` exists), `recreate_dynamic_resource_docs.sh` (step 6) and finally publishes the Glossary Items "OGCR Smart Contracts" and "OGCR Architecture" (step 7), which OGCR-App shows on its Help page; see "Role Groups" below. A failure in step 4 stops the run. A user who can't be added in step 5 (e.g. not on this OBP), a resource doc that can't be recreated in step 6, or a Glossary Item that can't be published in step 7 (e.g. OGCR-Smart-Contracts not cloned next to this repo, or an item edited on OBP since), is reported, the rest still run, and the script exits 1 at the end. With `OGCR_CHAIN_SETUP` set to OGCR-chain-cache's `scripts/setup-entities.sh`, the chain entities are created right after the sheet's (step 2b), before the index check and the docs that join them; `setup_local.sh` sets it when OGCR-chain-cache is cloned next to this repo, and otherwise says which docs will be skipped. Pass `--only` to recreate only the entities and skip those four steps:
 
 ```bash
-./recreate_dynamic_entities.sh                 # entities, example data, Role Groups, users, resource docs
+./recreate_dynamic_entities.sh                 # entities, example data, Role Groups, users, resource docs, Glossary Items
 ./recreate_dynamic_entities.sh --only          # entities and example data only
 ```
 

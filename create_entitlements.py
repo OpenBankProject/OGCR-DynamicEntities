@@ -2,7 +2,7 @@
 
 Grants the entity DEFINITION Roles, the Domain API Roles, the Dynamic Resource Doc Roles
 (obp_space.DYNAMIC_RESOURCE_DOC_ROLES), the Roles for managing the Role Groups
-and adding users to them (see role_groups.py), plus the RECORD Roles for every
+and adding users to them (see role_groups.py), the Roles for publishing the Glossary Items, plus the RECORD Roles for every
 `Entity: <name>` in the parsed entities file (produced by
 `parse_minimum_fields.py --save`), all at the bank id of the entities' space
 (OBP_ENTITY_SPACE_ID, or SYS for system level; see obp_space.py). An entity's record Roles
@@ -20,7 +20,7 @@ import sys
 from delete_dynamic_entities import DEFAULT_INPUT, parse_entity_names
 from get_and_delete_dynamic_entities import get_all_system_dynamic_entities
 from obp_client import token, obp_host, session, authorization, require_user_mode
-from obp_space import DOMAIN_API_ROLE_NAMES, DYNAMIC_RESOURCE_DOC_ROLES, ROLE_BANK_ID, describe
+from obp_space import DOMAIN_API_ROLE_NAMES, DYNAMIC_RESOURCE_DOC_ROLES, GLOSSARY_ROLES, ROLE_BANK_ID, describe
 from role_groups import GROUP_ADMIN_ROLES
 
 
@@ -76,6 +76,8 @@ wanted += DYNAMIC_RESOURCE_DOC_ROLES
 # The Roles create_role_groups.py and add_users_to_groups.py need (steps 4 and 5 of
 # recreate_dynamic_entities.sh). Some are system level, so each carries its own bank id.
 wanted += GROUP_ADMIN_ROLES
+# The Roles for publishing the Glossary Items (step 7 of recreate_dynamic_entities.sh).
+wanted += GLOSSARY_ROLES
 
 failed = []
 granted_count = 0

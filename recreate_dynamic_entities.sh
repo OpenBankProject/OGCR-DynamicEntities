@@ -19,6 +19,10 @@
 #   5. Add users to those groups from DO_NOT_COMMIT/Users-Group-DO_NOT_COMMIT.xlsx (add_users_to_groups.sh),
 #      if that file exists.
 #   6. Recreate the Dynamic Resource Docs (recreate_dynamic_resource_docs.sh).
+#   7. Publish the Glossary Items "OGCR Smart Contracts" and "OGCR Architecture"
+#      (publish_smart_contracts_glossary_item.sh, publish_architecture_glossary_item.sh),
+#      which OGCR-App shows on its Help page. Each is created if missing; one edited
+#      on OBP since it was last published is left alone and reported.
 #
 # Usage:
 #   ./recreate_dynamic_entities.sh [path/to/min_field_matrix.xlsx] [--target=LOCAL|PROD|BOTH] [--yes] [--only]
@@ -26,7 +30,8 @@
 # --target chooses the OBP instance: LOCAL (the default), PROD, or BOTH (LOCAL, then PROD).
 # OBP_TARGET=... in the environment does the same.
 #
-# --only recreates only the entities (steps 0-3), skipping the groups, users and resource docs.
+# --only recreates only the entities (steps 0-3), skipping the groups, users, resource docs
+# and Glossary Items.
 #
 # Everything it prints is also saved to logs/recreate_dynamic_entities_<time>.log,
 # with a header (host, space, sheet, git commit, options) and every timing, also
@@ -268,7 +273,18 @@ DOCS_FAILED=false
 timed_step "Step 6: resource docs" ./recreate_dynamic_resource_docs.sh --yes || DOCS_FAILED=true
 
 echo
-echo "Done. Dynamic entities recreated and populated from ${MATRIX}, Role Groups updated, resource docs recreated."
+echo "=================================================="
+echo " STEP 7: Publishing the Glossary Items"
+echo "=================================================="
+# "OGCR Architecture" embeds "OGCR Smart Contracts", so that one goes first.
+# Report a failure (e.g. OGCR-Smart-Contracts not cloned next to this repo, or an item
+# edited on OBP) but still finish the run.
+GLOSSARY_FAILED=false
+timed_step "Step 7: Smart Contracts glossary item" ./publish_smart_contracts_glossary_item.sh --yes || GLOSSARY_FAILED=true
+timed_step "Step 7: Architecture glossary item" ./publish_architecture_glossary_item.sh --yes || GLOSSARY_FAILED=true
+
+echo
+echo "Done. Dynamic entities recreated and populated from ${MATRIX}, Role Groups updated, resource docs recreated, Glossary Items published."
 if [ "$REGISTRY_FAILED" = true ]; then
   echo "✗ Some registry demo records were not created; see STEP 3 above." >&2
 fi
@@ -284,6 +300,9 @@ fi
 if [ "$CHAIN_FAILED" = true ]; then
   echo "✗ The chain entities were not all created; see STEP 2b above." >&2
 fi
-if [ "$DOCS_FAILED" = true ] || [ "$USERS_FAILED" = true ] || [ "$REGISTRY_FAILED" = true ] || [ "$INDEXING_FAILED" = true ] || [ "$CHAIN_FAILED" = true ]; then
+if [ "$GLOSSARY_FAILED" = true ]; then
+  echo "✗ The Glossary Items were not all published; see STEP 7 above." >&2
+fi
+if [ "$GLOSSARY_FAILED" = true ] || [ "$DOCS_FAILED" = true ] || [ "$USERS_FAILED" = true ] || [ "$REGISTRY_FAILED" = true ] || [ "$INDEXING_FAILED" = true ] || [ "$CHAIN_FAILED" = true ]; then
   exit 1
 fi

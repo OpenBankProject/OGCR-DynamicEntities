@@ -55,6 +55,14 @@ if SPACE_ID:
 		"CanUpdateBankLevelDynamicResourceDoc",
 	)]
 
+# The Roles publish_architecture_glossary_item.py needs to publish the Glossary Items
+# (step 7 of recreate_dynamic_entities.sh). Glossary Items are system level, so these are
+# granted at the empty bank id.
+GLOSSARY_ROLES = [
+	("CanCreateGlossaryItem", ""),
+	("CanUpdateGlossaryItem", ""),
+]
+
 
 def describe():
 	"""Human readable name of where the entities live, for log messages."""

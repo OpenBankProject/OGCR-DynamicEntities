@@ -38,6 +38,23 @@ DOMAIN_API_ROLE_NAMES = [
 	"CanUpdateDomainApi",
 ]
 
+# The Roles dynamic_resource_docs.py needs, as (role name, bank id) pairs: the Scala doc
+# lives at system level, the Query docs at the space's bank (a Query reads that bank's
+# entities), so with a space both sets are needed.
+DYNAMIC_RESOURCE_DOC_ROLES = [(r, "") for r in (
+	"CanCreateDynamicResourceDoc",
+	"CanDeleteDynamicResourceDoc",
+	"CanGetAllDynamicResourceDocs",
+	"CanUpdateDynamicResourceDoc",
+)]
+if SPACE_ID:
+	DYNAMIC_RESOURCE_DOC_ROLES += [(r, SPACE_ID) for r in (
+		"CanCreateBankLevelDynamicResourceDoc",
+		"CanDeleteBankLevelDynamicResourceDoc",
+		"CanGetAllBankLevelDynamicResourceDocs",
+		"CanUpdateBankLevelDynamicResourceDoc",
+	)]
+
 
 def describe():
 	"""Human readable name of where the entities live, for log messages."""

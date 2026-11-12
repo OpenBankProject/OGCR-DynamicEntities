@@ -80,7 +80,7 @@ def main():
 		("Entity records v7.0.0", f"/obp/v7.0.0/banks/{bank}/dynamic-entities/{args.entity}", "same as above"),
 		("Users", "/obp/v6.0.0/users?limit=1", "403: UserOnly"),
 		("Groups", "/obp/v6.0.0/management/groups", "403: checked against Entitlements"),
-		("Dynamic Resource Docs", "/obp/v4.0.0/management/dynamic-resource-docs", "403: UserOnly"),
+		("Dynamic Resource Docs", "/obp/v5.1.0/management/dynamic-resource-docs", "403: UserOnly"),
 	]
 	width = max(len(c[0]) for c in checks)
 	for what, path, predicted in checks:

@@ -13,15 +13,17 @@
 #      Roles can't be checked yet: OBP grants them to whoever creates an entity, in step 6.
 #   6. Recreate the entities, example data, Role Groups and resource docs
 #      (recreate_dynamic_entities.sh, which asks for confirmation unless --yes), then
-#      grant any record Roles still missing and check all the Roles.
-#   7. Create the chain entities with OGCR-chain-cache's setup-entities.sh, if it's there.
+#      grant any record Roles still missing and check all the Roles. The chain
+#      entities (activity_on_chain, ...) are created inside that run, right after the
+#      sheet's entities and before the docs that join them, with OGCR-chain-cache's
+#      scripts/setup-entities.sh (OGCR_CHAIN_SETUP), when it is cloned next to this repo.
 #
 # Usage:
 #   ./setup_local.sh [--yes] [--no-recreate] [--no-chain]
 #
 # --yes          pass --yes to recreate_dynamic_entities.sh (no confirmation)
 # --no-recreate  stop after step 5 (Roles in place, nothing recreated)
-# --no-chain     skip step 7
+# --no-chain     don't create the chain entities (the docs that join them are then skipped)
 #
 # Always LOCAL: it refuses to run with OBP_TARGET / --target set to anything else.
 # Every step is safe to re-run; Roles and the bank are only created when missing.
@@ -112,26 +114,43 @@ step "STEP 5: Check login and the Roles needed to create the entities"
 
 if [ "$RECREATE" = true ]; then
   step "STEP 6: Recreate the dynamic entities"
-  if [ "$ASSUME_YES" = true ]; then
-    ./recreate_dynamic_entities.sh --yes
+  if [ "$CHAIN" = true ] && [ -x "$CHAIN_SETUP" ]; then
+    OGCR_CHAIN_SETUP="$(cd "$(dirname "$CHAIN_SETUP")" && pwd)/$(basename "$CHAIN_SETUP")"
+    export OGCR_CHAIN_SETUP
+    echo "The chain entities are created with ${OGCR_CHAIN_SETUP} (STEP 2b of the recreate)."
   else
-    ./recreate_dynamic_entities.sh
+    unset OGCR_CHAIN_SETUP
+    if [ "$CHAIN" = true ]; then
+      echo "⚠ No ${CHAIN_SETUP}: the chain entities are not created." >&2
+      echo "  Clone or update OGCR-chain-cache next to this repo (it needs scripts/setup-entities.sh) and run this again." >&2
+    else
+      echo "⚠ --no-chain: the chain entities are not created." >&2
+    fi
+    CHAIN_DOCS="$(OBP_LOG_LEVEL=WARNING "$PYTHON" -c 'from parse_minimum_fields import CHAIN_CACHE_ENTITIES as chain
+from dynamic_resource_docs import DOCS, entities_read
+print(", ".join(n for n, d in DOCS.items() if set(entities_read(d)) & chain) or "(none)")' 2>/dev/null)" \
+      || CHAIN_DOCS="the registry Queries that join activity_on_chain"
+    echo "  Without them these Dynamic Resource Docs are skipped: ${CHAIN_DOCS}" >&2
+  fi
+  # A run that reports problems (e.g. docs skipped for a missing entity) still created
+  # the entities, so their record Roles are granted and checked before it is passed on.
+  RECREATE_STATUS=0
+  if [ "$ASSUME_YES" = true ]; then
+    ./recreate_dynamic_entities.sh --yes || RECREATE_STATUS=$?
+  else
+    ./recreate_dynamic_entities.sh || RECREATE_STATUS=$?
   fi
   step "STEP 6: Record Roles for the entities"
   ./create_entitlements.sh
   ./check_login_and_roles.sh
+  if [ "$RECREATE_STATUS" -ne 0 ]; then
+    echo
+    echo "✗ The recreate reported problems (exit ${RECREATE_STATUS}); see STEP 6 above." >&2
+    exit "$RECREATE_STATUS"
+  fi
 else
   echo
   echo "Skipping the recreate (--no-recreate). Run ./recreate_dynamic_entities.sh when ready."
-fi
-
-if [ "$CHAIN" = true ] && [ "$RECREATE" = true ]; then
-  step "STEP 7: Chain entities (OGCR-chain-cache)"
-  if [ -x "$CHAIN_SETUP" ]; then
-    "$CHAIN_SETUP"
-  else
-    echo "No ${CHAIN_SETUP}; skipping. Clone OGCR-chain-cache next to this repo and run its scripts/setup-entities.sh."
-  fi
 fi
 
 echo

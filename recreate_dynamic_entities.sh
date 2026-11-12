@@ -18,7 +18,10 @@
 #   6. Recreate the Dynamic Resource Docs (recreate_dynamic_resource_docs.sh).
 #
 # Usage:
-#   ./recreate_dynamic_entities.sh [path/to/min_field_matrix.xlsx] [--yes] [--only]
+#   ./recreate_dynamic_entities.sh [path/to/min_field_matrix.xlsx] [--target=LOCAL|PROD|BOTH] [--yes] [--only]
+#
+# --target chooses the OBP instance: LOCAL (the default), PROD, or BOTH (LOCAL, then PROD).
+# OBP_TARGET=... in the environment does the same.
 #
 # --only recreates only the entities (steps 0-3), skipping the groups, users and resource docs.
 #

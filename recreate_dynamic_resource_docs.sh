@@ -4,12 +4,18 @@
 #
 # Recreate the OGCR Dynamic Resource Docs (the DOCS in dynamic_resource_docs.py,
 # e.g. registry_activities) from their .scala files. For each doc:
-#   1. Compile it (dry run, nothing stored); stop if it doesn't compile, so the
-#      doc already on OBP is left in place.
-#   2. Delete the doc on OBP, if there is one.
-#   3. Create it again.
-#   4. Call it anonymously to check it is served and public. OBP caches its list
+#   1. Compile it (dry run, nothing stored). If it doesn't compile (e.g. the
+#      instance has allow_user_generated_scala_code=false), skip it, so the doc
+#      already on OBP is left in place.
+#   2. Check OBP has every entity a Query doc reads (check-entities); skip it,
+#      leaving it in place, if one is missing (e.g. activity_on_chain, which
+#      OGCR-chain-cache creates).
+#   3. Delete the doc on OBP, if there is one.
+#   4. Create it again.
+#   5. Call it anonymously to check it is served and public. OBP caches its list
 #      of resource docs (40s by default), so a 404 is retried for up to 90s.
+# A doc that fails a step does not stop the others; every failure is listed at
+# the end and the script then exits 1.
 #
 # Usage:
 #   ./recreate_dynamic_resource_docs.sh [DOC ...] [--yes] [--dry-run]
@@ -70,9 +76,10 @@ if [ "$DRY_RUN" = true ]; then
   for doc in "${DOC_NAMES[@]}"; do
     echo "[DRY RUN] Compiling ${doc}"
     "$PYTHON" dynamic_resource_docs.py compile "$doc" || COMPILE_FAILED=true
+    "$PYTHON" dynamic_resource_docs.py check-entities "$doc" || COMPILE_FAILED=true
   done
   if [ "$COMPILE_FAILED" = true ]; then
-    echo "✗ Some docs don't compile; a real run would stop before deleting them." >&2
+    echo "✗ Some docs don't compile or read a missing entity; a real run would skip them and leave them as they are." >&2
     exit 1
   fi
   echo "[DRY RUN] Done. Nothing was changed."
@@ -96,22 +103,39 @@ if [ "$ASSUME_YES" != true ]; then
   fi
 fi
 
-VERIFY_FAILED=false
+FAILED=()
+RECREATED=()
 for doc in "${DOC_NAMES[@]}"; do
   echo
   echo "=================================================="
   echo " ${doc}"
   echo "=================================================="
-  "$PYTHON" dynamic_resource_docs.py compile "$doc"
-  "$PYTHON" dynamic_resource_docs.py delete "$doc"
-  "$PYTHON" dynamic_resource_docs.py create "$doc"
-  # Report a failed check (e.g. the create is waiting for approval) but still do the other docs.
-  "$PYTHON" dynamic_resource_docs.py verify "$doc" --wait 90 || VERIFY_FAILED=true
+  # A doc that fails is reported at the end; the other docs are still recreated.
+  if ! "$PYTHON" dynamic_resource_docs.py compile "$doc"; then
+    FAILED+=("${doc}: compile failed, left as it is on OBP")
+    continue
+  fi
+  if ! "$PYTHON" dynamic_resource_docs.py check-entities "$doc"; then
+    FAILED+=("${doc}: check-entities failed (an entity it reads is missing), left as it is on OBP")
+    continue
+  fi
+  if ! "$PYTHON" dynamic_resource_docs.py delete "$doc"; then
+    FAILED+=("${doc}: delete failed")
+    continue
+  fi
+  if ! "$PYTHON" dynamic_resource_docs.py create "$doc"; then
+    FAILED+=("${doc}: create failed, the doc is no longer on OBP")
+    continue
+  fi
+  RECREATED+=("$doc")
+  # e.g. the create is waiting for approval, or OBP's cache has not caught up
+  "$PYTHON" dynamic_resource_docs.py verify "$doc" --wait 90 || FAILED+=("${doc}: verify failed")
 done
 
 echo
-echo "Done. Dynamic Resource Docs recreated: ${DOC_NAMES[*]}"
-if [ "$VERIFY_FAILED" = true ]; then
-  echo "✗ Some docs failed the anonymous check; see above." >&2
+echo "Done. Dynamic Resource Docs recreated: ${RECREATED[*]:-(none)}"
+if [ ${#FAILED[@]} -gt 0 ]; then
+  echo "✗ ${#FAILED[@]} doc(s) need attention:" >&2
+  printf '  ✗ %s\n' "${FAILED[@]}" >&2
   exit 1
 fi

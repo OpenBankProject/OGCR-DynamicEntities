@@ -11,6 +11,7 @@ Roles checked, at the bank id of the entities' space (OBP_ENTITY_SPACE_ID, or
 SYS for system level; see obp_space.py):
   - the entity DEFINITION Roles
   - the Domain API Roles (domain_api.py)
+  - the Dynamic Resource Doc Roles (dynamic_resource_docs.py)
   - the Roles for managing the Role Groups and adding users to them (see
     role_groups.py; the user lookup ones are system level)
   - the entity RECORD Roles for every `Entity: <name>` in the parsed entities
@@ -35,7 +36,7 @@ import sys
 import requests
 import obp_target  # loads .env and picks LOCAL or PROD settings
 
-from obp_space import DOMAIN_API_ROLE_NAMES, ROLE_BANK_ID, SPACE_ID, describe
+from obp_space import DOMAIN_API_ROLE_NAMES, DYNAMIC_RESOURCE_DOC_ROLES, ROLE_BANK_ID, SPACE_ID, describe
 from role_groups import GROUP_ADMIN_ROLES
 
 
@@ -118,6 +119,7 @@ def get_current_user(host, token):
 def required_roles(args):
 	"""Return a list of (role_name, bank_id) pairs to check."""
 	roles = [(r, ROLE_BANK_ID) for r in META_ROLE_NAMES + DOMAIN_API_ROLE_NAMES] + list(GROUP_ADMIN_ROLES)
+	roles += DYNAMIC_RESOURCE_DOC_ROLES
 	if not args.no_entities:
 		if os.path.exists(args.file):
 			for name in parse_entity_names(args.file):

@@ -153,7 +153,7 @@ def check_used(decls):
 			"method_body": urllib.parse.quote(json.dumps(d, separators=(",", ":"))),
 			"bank_id": SPACE_ID or "SYS",
 			# Sorting on an indexed field makes the page read eligible for the index.
-			"caller_parameters": f"obp_sort_by={d['from']}_id",
+			"caller_parameters": f"obp_sort_by={sort_field(d['from'])}",
 		}
 		resp = session.post(f"{HOST}{EXPLAIN_URL}", headers=headers(), json=body)
 		if resp.status_code == 403:

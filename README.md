@@ -57,6 +57,7 @@ Every `.sh` below, except `check_min_field_matrix.sh` (offline), also takes `--t
 
 # Checks (read-only)
 ./check_min_field_matrix.sh [MATRIX] [--strict]
+./check_login.sh [--target=T]
 ./check_login_and_roles.sh [ENTITIES_FILE] [--no-entities] [--role ROLE[@BANK_ID] ...] [--list] [--target=T]
 ./diff_entities.sh [MATRIX] [--bank-id BANK_ID] [--structure-only] [--target=T]
 ./check_openapi_field_types.sh [MATRIX] [--target=T]
@@ -136,6 +137,7 @@ Run the `.sh` wrappers: each one changes to this directory, uses `.venv/bin/pyth
 | Script | What it checks |
 |---|---|
 | `check_min_field_matrix.sh` / `.py` | The spreadsheet, offline, before anything is created. |
+| `check_login.sh` / `.py` | DirectLogin works, and nothing else: no Roles or bank checked. |
 | `check_login_and_roles.sh` / `.py` | DirectLogin works and the user holds the Roles the scripts need. |
 | `diff_entities.sh` / `.py` | How the entities on OBP differ from the spreadsheet. Exits 1 when they differ. |
 | `check_openapi_field_types.sh` / `.py` | Every field type in OBP's generated OpenAPI document against the spreadsheet. |

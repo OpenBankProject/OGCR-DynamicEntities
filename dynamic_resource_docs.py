@@ -277,8 +277,8 @@ def build_payload(doc, include_body=True):
 def management_url(host, doc):
     """The doc's management endpoint: at its bank when it has one, else system level."""
     if doc.get("bank_id"):
-        return f"{host}/obp/v4.0.0/management/banks/{doc['bank_id']}/dynamic-resource-docs"
-    return f"{host}/obp/v4.0.0/management/dynamic-resource-docs"
+        return f"{host}/obp/v5.1.0/management/banks/{doc['bank_id']}/dynamic-resource-docs"
+    return f"{host}/obp/v5.1.0/management/dynamic-resource-docs"
 
 
 def find_existing(doc, token, host):

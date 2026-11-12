@@ -41,7 +41,7 @@
       "entity": "certification_scheme",
       "on": "certification_scheme_id",
       "fields": {
-        "selected_certification_scheme_name": "name",
+        "selected_certification_scheme_name": "legal_name",
         "selected_certification_scheme_version": "scheme_version_number"
       }
     },

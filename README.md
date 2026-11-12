@@ -520,7 +520,7 @@ The scripts build these paths with `obp_space.record_path(entity, public=True)`.
 
 The flag is only sent when it is switched on, so an OBP build that predates it is unaffected. See the `Dynamic-Entity-Access-Model` glossary entry on your OBP instance for the full access model (`hasPersonalEntity`, `hasCommunityAccess`, `useRowLevelAccess`, `authMode` and field-level roles); this flag is its "curated reference data" pattern — role holders maintain the data, everyone reads it.
 
-Currently ticked: `activity`, `activity_media`, `activity_on_chain`, `activity_technologies_practices_processes`, `activity_verification`, `certificate_of_compliance`, `certification_body`, `certification_scheme`, `co_benefit`, `country`, `operator`, `sustainable_development_goal`, `sustainable_development_goals`, `technologies_practices_processes`.
+Currently ticked: `activity`, `activity_media`, `activity_on_chain`, `activity_sustainable_development_goal`, `activity_technologies_practices_processes`, `activity_verification`, `certificate_of_compliance`, `certification_body`, `certification_scheme`, `co_benefit`, `country`, `operator`, `sustainable_development_goal`, `technologies_practices_processes`.
 
 **Fixtures (controlled vocabularies)**
 

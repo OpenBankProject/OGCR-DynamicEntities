@@ -1,5 +1,5 @@
 {
-  "from": "sustainable_development_goals",
+  "from": "activity_sustainable_development_goal",
   "select": ["activity_id", "sustainable_development_goal_id"],
   "join": [
     {

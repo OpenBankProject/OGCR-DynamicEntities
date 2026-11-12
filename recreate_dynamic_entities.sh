@@ -9,6 +9,9 @@
 #   1. Delete ONLY those OGCR entities on OBP (objects + definitions). Other
 #      dynamic entities on the instance are left untouched.
 #   2. Create the entities defined in min_field_matrix.xlsx.
+#   2b. If OGCR_CHAIN_SETUP names OGCR-chain-cache's scripts/setup-entities.sh, run it
+#      to create the chain entities (setup_local.sh sets it), before anything that
+#      reads them: the index check and the Dynamic Resource Docs.
 #   3. Create example objects for those entities, then the registry's
 #      demo records (create_registry_demo_data.sh), then check OBP uses the
 #      indexes (check_indexing.sh).
@@ -193,6 +196,19 @@ echo " STEP 2: Creating entities from ${MATRIX}"
 echo "=================================================="
 timed_step "Step 2: create entities" "$PYTHON" parse_minimum_fields.py "$MATRIX" --create --yes
 
+# The chain entities (activity_on_chain, ...) are defined by OGCR-chain-cache, not the sheet.
+# The registry Queries join activity_on_chain, which references activity, so they are
+# created here: after the sheet's entities, before the index check and the docs.
+CHAIN_FAILED=false
+if [ -n "${OGCR_CHAIN_SETUP:-}" ]; then
+  echo
+  echo "=================================================="
+  echo " STEP 2b: Creating the chain entities (${OGCR_CHAIN_SETUP})"
+  echo "=================================================="
+  # Report a failure but still finish the run; the docs that need them are then skipped.
+  timed_step "Step 2b: chain entities" "$OGCR_CHAIN_SETUP" || CHAIN_FAILED=true
+fi
+
 echo
 echo "=================================================="
 echo " STEP 3: Creating example data from ${MATRIX}"
@@ -215,7 +231,10 @@ if [ "$ONLY_ENTITIES" = true ]; then
   if [ "$INDEXING_FAILED" = true ]; then
     echo "✗ OBP is not using every index; see the index check in STEP 3 above." >&2
   fi
-  if [ "$REGISTRY_FAILED" = true ] || [ "$INDEXING_FAILED" = true ]; then
+  if [ "$CHAIN_FAILED" = true ]; then
+    echo "✗ The chain entities were not all created; see STEP 2b above." >&2
+  fi
+  if [ "$REGISTRY_FAILED" = true ] || [ "$INDEXING_FAILED" = true ] || [ "$CHAIN_FAILED" = true ]; then
     exit 1
   fi
   exit 0
@@ -262,6 +281,9 @@ fi
 if [ "$DOCS_FAILED" = true ]; then
   echo "✗ The Dynamic Resource Docs were not all recreated; see STEP 6 above." >&2
 fi
-if [ "$DOCS_FAILED" = true ] || [ "$USERS_FAILED" = true ] || [ "$REGISTRY_FAILED" = true ] || [ "$INDEXING_FAILED" = true ]; then
+if [ "$CHAIN_FAILED" = true ]; then
+  echo "✗ The chain entities were not all created; see STEP 2b above." >&2
+fi
+if [ "$DOCS_FAILED" = true ] || [ "$USERS_FAILED" = true ] || [ "$REGISTRY_FAILED" = true ] || [ "$INDEXING_FAILED" = true ] || [ "$CHAIN_FAILED" = true ]; then
   exit 1
 fi

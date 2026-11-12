@@ -33,4 +33,17 @@ check '[ -n "$chain" ] && [ -n "$docs" ] && [ "$chain" -lt "$docs" ]' "before th
 if [ "$fail" -ne 0 ]; then
   echo "--- calls ---"; cat "$FAKE_LOG"; echo "--- output ---"; echo "$out" | tail -30
 fi
+
+# Without OGCR_CHAIN_SETUP (as on PROD, where OGCR-chain-cache runs on its own) there is no chain step.
+: > "$FAKE_LOG"
+out="$(cd "$WORK" && env -u OGCR_CHAIN_SETUP ./recreate_dynamic_entities.sh --yes 2>&1)"
+rc=$?
+check '[ "$rc" -eq 0 ] && ! grep -q "CHAIN SETUP" "$FAKE_LOG" && ! grep -q "STEP 2b" <<< "$out"' "no chain step without OGCR_CHAIN_SETUP (rc $rc)"
+
+# A failing chain setup is reported, the run still recreates the docs, and exits 1.
+printf '#!/usr/bin/env bash\necho "CHAIN SETUP" >> "%s"\nexit 3\n' "$FAKE_LOG" > "$WORK/fake_chain_setup.sh"
+: > "$FAKE_LOG"
+out="$(cd "$WORK" && ./recreate_dynamic_entities.sh --yes 2>&1)"
+rc=$?
+check '[ "$rc" -eq 1 ] && grep -q "dynamic_resource_docs.py create ok_doc" "$FAKE_LOG" && grep -q "chain entities were not all created" <<< "$out"' "a failed chain step is reported and the run goes on (rc $rc)"
 exit "$fail"

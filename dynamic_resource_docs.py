@@ -10,6 +10,7 @@ value.
 
 Usage:
   python3 dynamic_resource_docs.py compile registry_activities     # dry run, nothing stored
+  python3 dynamic_resource_docs.py check-entities registry_activity_query   # does OBP have every entity the Query reads?
   python3 dynamic_resource_docs.py list
   python3 dynamic_resource_docs.py create registry_activities
   python3 dynamic_resource_docs.py update registry_activities
@@ -308,6 +309,66 @@ def doc_changes(doc, existing):
     return changed
 
 
+def entities_read(doc):
+    """The entities a Query doc reads (its `from` and every joined entity); none for a Scala doc."""
+    if "query_file" not in doc:
+        return []
+    declaration = json.loads(read_method_body(doc))
+    names = [declaration.get("from")] + [j.get("entity") for j in declaration.get("join") or []]
+    return sorted({n for n in names if n})
+
+
+def entity_names_on_obp(doc, token, host):
+    """The names of the dynamic entities at the doc's bank (or system level)."""
+    if doc.get("bank_id"):
+        url = f"{host}/obp/v5.1.0/management/banks/{doc['bank_id']}/dynamic-entities"
+    else:
+        url = f"{host}/obp/v5.1.0/management/system-dynamic-entities"
+    resp = session.get(url, headers=_headers(token))
+    _raise_with_body(resp)
+    names = set()
+    for entity in resp.json().get("dynamic_entities", []):
+        if entity.get("entity_name"):
+            names.add(entity["entity_name"])
+        # The v5.1.0 shape keys the definition by the entity's name.
+        names.update(k for k, v in entity.items() if isinstance(v, dict) and "properties" in v)
+    return names
+
+
+def missing_entities(doc, token, host):
+    """The entities a Query doc reads that are not on OBP. OBP refuses to create such a doc
+    (OBP-40065), so it is better skipped, leaving any doc already there in place."""
+    wanted = entities_read(doc)
+    if not wanted:
+        return []
+    have = entity_names_on_obp(doc, token, host)
+    return [n for n in wanted if n not in have]
+
+
+def missing_entities_message(name, missing):
+    from parse_minimum_fields import CHAIN_CACHE_ENTITIES
+    lines = [f"{name}: the Query reads entities that are not on OBP: {', '.join(missing)}"]
+    chain = [n for n in missing if n in CHAIN_CACHE_ENTITIES]
+    if chain:
+        lines.append(f"  {', '.join(chain)} come from OGCR-chain-cache: run its scripts/setup-entities.sh"
+                     " (setup_local.sh does, when OGCR-chain-cache is cloned next to this repo)")
+    others = [n for n in missing if n not in CHAIN_CACHE_ENTITIES]
+    if others:
+        lines.append(f"  {', '.join(others)}: create them from the sheet first (./update_dynamic_entities.sh)")
+    return "\n".join(lines)
+
+
+def cmd_check_entities(name, doc, token, host):
+    """Exit 1 when the doc reads an entity that is not on OBP; read-only."""
+    missing = missing_entities(doc, token, host)
+    if missing:
+        print(missing_entities_message(name, missing))
+        return 1
+    if "query_file" in doc:
+        print(f"{name}: every entity the Query reads is on OBP")
+    return 0
+
+
 def cmd_compile(name, doc, token, host):
     """Dry run. Returns compiler problems; stores nothing."""
     if doc.get("programming_lang") == "Query" and doc.get("bank_id"):
@@ -424,6 +485,7 @@ def cmd_delete(name, doc, token, host):
 
 
 COMMANDS = {
+    "check-entities": cmd_check_entities,
     "compile": cmd_compile,
     "verify": cmd_verify,
     "list": cmd_list,

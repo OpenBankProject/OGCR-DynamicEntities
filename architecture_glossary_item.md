@@ -7,16 +7,17 @@ The OGCR registry records carbon activities, parcels, verifications and certific
 - **Agile data model definition and construction.** The data model is defined in a spreadsheet and built as Dynamic Entities at runtime, with their endpoints, Roles and indexes. Changing it needs no code change or redeploy, and existing records are kept.
 - **Open source.** OBP-API, the OBP-MCP server, Opey and the OGCR repositories are open source (AGPL-3.0).
 - **Open standards.** OAuth2, OpenID Connect, OpenAPI, JSON, MCP, and EVM tokens (ERC-721, ERC-20, ERC-6551).
-- **Decoupled apps.** OGCR-App and the Operator and Certifier Platforms are separate apps that use the API and OIDC for authentication.
+- **Decoupled apps.** OGCR-App, the Operator Platform and the Certification Platform are separate apps that use the API and OIDC for authentication.
 - **OAuth2 / OIDC.** People log in with an OpenID Connect provider, and apps and services call the API with OAuth2 tokens.
 - **RBAC.** Each operation on each entity needs a Role, and people get Roles through Role Groups.
+- **Platform Apps.** Services that work without a person, such as the chain cache and OBP Senti, call the API as themselves, with Scopes granted to their Consumer. The tokenizer will move to Platform App mode too. See the "Platform Apps" Glossary Item.
 - **Dockerised deployment.** Each service is built as a Docker image and deployed on Kubernetes.
 
 ### The big picture
 
 ```
  Schema definition spreadsheet    OGCR-App, OGCR Operator     Opey Agent, Claude Code
-              │                    and Certifier Platforms          |
+              │                 and Certification Platforms         |
               v                                |                    v
     OGCR-DynamicEntities                       |               OBP-MCP server
               │ entity definitions, Roles,     |                    |
@@ -51,9 +52,9 @@ Arrows point from the caller to the service it calls.
 
 **OGCR-App**: the registry's public-facing pages and the marketplace (work in progress). Users log in with OIDC, and it reads and writes through OBP-API, never directly on chain.
 
-**OGCR Operator Platform**: the application for operators, who run the carbon activities.
+**OGCR Operator Platform**: the application for operators, who run the carbon activities. Built by OGCR-GILAB (https://github.com/OGCR-GILAB/operator-platform, with its API service at https://github.com/OGCR-GILAB/operator-platform-api), it is a client of OBP-API.
 
-**OGCR Certifier Platform**: the application for certification bodies, who verify and certify activities.
+**OGCR Certification Platform**: the application for certification bodies, who verify and certify activities. Built by MultiOne (ogcr-certification-platform, https://codeberg.org/OGCR-project/ogcr-certification-platform), it is a client of OBP-API.
 
 **OBP-MCP server**: a Model Context Protocol server that lets AI agents discover and call OBP-API endpoints, including the endpoints generated for the registry's Dynamic Entities, and read the Glossary. Claude Code, Claude Desktop and IDE agents connect to it with the user's OAuth token; Opey connects with a Consent-JWT.
 
@@ -76,16 +77,25 @@ Arrows point from the caller to the service it calls.
 
 ### Source code
 
-- [OBP-API](https://github.com/OpenBankProject/OBP-API)
-- [OGCR-DynamicEntities](https://github.com/OpenBankProject/OGCR-DynamicEntities)
-- [OGCR-Smart-Contracts](https://github.com/OpenBankProject/OGCR-Smart-Contracts)
-- [ogcr-tokenizer](https://github.com/TESOBE/ogcr-tokenizer)
-- [OGCR-Chain-Cache](https://github.com/TESOBE/OGCR-chain-cache)
-- [OGCR-App](https://github.com/OpenBankProject/OGCR-App)
-- [OBP-MCP server](https://github.com/OpenBankProject/OBP-MCP)
-- [Opey Agent](https://github.com/OpenBankProject/OBP-Opey-II)
-- [OBP Portal and API Manager](https://github.com/OpenBankProject/OBP-Frontend)
-- [API Explorer II](https://github.com/OpenBankProject/API-Explorer-II)
+Every repository, with what it does. The OGCR DCR product site (https://ogcr-dcr-product.tesobe.com/#components) describes each of them, and its publish workflow checks that both name the same repositories, so keep one repository per line in the form `- [Name](link): what it does`.
+
+- [OBP-API](https://github.com/OpenBankProject/OBP-API): The registry gateway
+- [OGCR-DynamicEntities](https://github.com/OpenBankProject/OGCR-DynamicEntities): Builds the data model
+- [OGCR-App](https://github.com/OpenBankProject/OGCR-App): Registry pages and marketplace
+- [OGCR-GILAB Operator Platform](https://github.com/OGCR-GILAB/operator-platform): App for activity operators
+- [OGCR-GILAB Operator Platform API](https://github.com/OGCR-GILAB/operator-platform-api): The Operator Platform's API service
+- [ogcr-certification-platform](https://codeberg.org/OGCR-project/ogcr-certification-platform): App for certification bodies
+- [ogcr-tokenizer](https://github.com/TESOBE/ogcr-tokenizer): Mints verified records
+- [OGCR-Smart-Contracts](https://github.com/OpenBankProject/OGCR-Smart-Contracts): The token contracts
+- [OGCR-Chain-Cache](https://github.com/TESOBE/OGCR-chain-cache): Mirrors tokens into the registry
+- [OBP-OIDC](https://github.com/OpenBankProject/OBP-OIDC): OpenID Connect provider
+- [OBP Keycloak Provider](https://github.com/OpenBankProject/OBP-Keycloak-Provider): Lets Keycloak log people in with their OBP-API accounts
+- [OBP-MCP server](https://github.com/OpenBankProject/OBP-MCP): MCP server for AI agents
+- [Opey Agent](https://github.com/OpenBankProject/OBP-Opey-II): OBP's AI assistant
+- [OBP Senti](https://github.com/OpenBankProject/OBP-Sentinel): Agentic security and performance checking
+- [OBP Portal and API Manager](https://github.com/OpenBankProject/OBP-Frontend): Consumer registration and administration
+- [API Explorer II](https://github.com/OpenBankProject/API-Explorer-II): Browse and try the registry's endpoints
+- [OGCR-Charts](https://github.com/TESOBE/OGCR-Charts): Helm charts to deploy the OGCR platform on Kubernetes
 
 To browse the registry's endpoints, open [API Explorer II](https://apiexplorer.dcr.ogcr.tesobe.com/?content=dynamic&bank_id=ogcr).
 

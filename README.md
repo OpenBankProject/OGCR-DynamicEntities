@@ -90,7 +90,9 @@ OBP_TARGET=T python3 create_example_data.py [MATRIX] [--log] [--fixtures-only] [
 ./recreate_dynamic_resource_docs.sh [DOC ...] [--yes] [--dry-run] [--target=T]
 OBP_TARGET=T python3 dynamic_resource_docs.py compile|verify|list|create|update|delete [DOC] [--wait SECONDS] [--token TOKEN] [--host URL]
 #   DOC: registry_activities (default), registry_activities_query, registry_activity_query,
-#        registry_activity_practices_query, registry_activity_sdgs_query, registry_activity_certificates_query
+#        registry_activity_practices_query, registry_activity_sdgs_query, registry_activity_certificates_query,
+#        registry_carbon_garden_query, registry_carbon_garden_parcels_query,
+#        registry_carbon_garden_public_query
 #   --wait: verify only, retries a 404 while OBP's cache catches up
 
 # Domain API
@@ -220,7 +222,7 @@ Run the `.sh` wrappers: each one changes to this directory, uses `.venv/bin/pyth
 | `user` (default) | DirectLogin | the user's Entitlements | `OBP_USERNAME`, `OBP_PASSWORD`, `OBP_CONSUMER_KEY` |
 | `platform` | OAuth2 client credentials from OBP-OIDC, as a Platform App (like OGCR-chain-cache) | Scopes of the app's Consumer | `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` |
 
-Platform mode is prepared, not yet usable for the whole pipeline. OBP accepts an app's token only on endpoints whose authMode is `UserOrApplication`, and on the records of entities whose `auth_mode` is; elsewhere it answers 403, because it checks the Roles of the User it creates for the client id rather than the Consumer's Scopes. Today that covers the v7.0.0 entity definition endpoints (GET, POST, PUT) and public reads; not the v4/v5.1/v6 definition endpoints these scripts mostly call, Users, Groups, Role grants, Dynamic Resource Docs, banks or the Glossary, nor the registry's records, whose entities are `UserOnly`. `./check_client_credentials.sh` shows the current state. `create_entitlements.py` and `check_login_and_roles.py` act for the logged-in user and refuse to run in platform mode.
+In platform mode, OBP checks each Role an endpoint needs against the Scopes granted to the app's Consumer, so the Consumer must be marked as a Platform App and hold those Scopes. That covers every endpoint that lists its Roles in its Resource Doc, including the records of every entity (the registry's too) and the v7.0.0 entity definition endpoints. Some older endpoints still check a user's Entitlements in their own code, and answer 403 to an app whatever Scopes it holds. `./check_client_credentials.sh` shows which endpoints these scripts use accept the app. `create_entitlements.py` and `check_login_and_roles.py` act for the logged-in user and refuse to run in platform mode.
 
 **Chain entities belong to OGCR-chain-cache**
 

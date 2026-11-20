@@ -188,6 +188,29 @@ DOCS["registry_activity_certificates_query"] = _registry_query_doc(
     "getRegistryActivityCertificatesQuery", "Get the certificates of compliance of OGCR registry activities",
     "certificates")
 
+# The registry's Carbon Garden page (the app's /carbon-garden), for logged in users only: every activity with its plans, certificates, parcel verifications and carbon credit batches, and every parcel linked to an activity with its shape. Two Queries because a Query cannot nest a join (activity -> parcel_activity -> parcel). They read entities without public access, so they are not public: OBP answers them for a logged in user who may read those entities, and `verify` calls them as the logged in user.
+DOCS["registry_carbon_garden_query"] = {
+    **_registry_query_doc(
+        "registry_carbon_garden_query.json", "/registry/carbon-garden-query",
+        "getRegistryCarbonGardenQuery",
+        "Get OGCR registry activities with their plans, certificates, parcel verifications and carbon credit batches",
+        "activities"),
+    "public": False,
+}
+DOCS["registry_carbon_garden_parcels_query"] = {
+    **_registry_query_doc(
+        "registry_carbon_garden_parcels_query.json", "/registry/carbon-garden-parcels-query",
+        "getRegistryCarbonGardenParcelsQuery",
+        "Get the parcels of OGCR registry activities with their shapes", "parcels"),
+    "public": False,
+}
+
+# The public version of the Carbon Garden (the app's /registry/carbon-garden): the same activities with their certificates, parcel verifications and carbon credit batches, but no plans or parcel shapes. It reads only entities with public access, so an anonymous caller can read it.
+DOCS["registry_carbon_garden_public_query"] = _registry_query_doc(
+    "registry_carbon_garden_public_query.json", "/registry/carbon-garden-public-query",
+    "getRegistryCarbonGardenPublicQuery",
+    "Get OGCR registry activities with their certified, verified and issued carbon amounts", "activities")
+
 # Resource-doc endpoints are served under an extra path segment that the Dynamic
 # Endpoint glossary entry does not mention: the docs describe
 # /obp/dynamic-endpoint + <request_url>, but a Dynamic *Resource Doc* actually lands at

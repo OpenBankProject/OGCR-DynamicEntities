@@ -6,9 +6,9 @@ from each group of endpoints the scripts use, and prints the status OBP answers 
 reading OBP-API's code predicts. Read-only: nothing is created, changed or deleted.
 
 A client credentials token is not user-less in OBP: OBP creates a User from the token's sub (the
-client id), so endpoints that only need "a user" let it through, and Role checks look at that
-User's Entitlements unless the endpoint's authMode is UserOrApplication, in which case the
-Consumer's Scopes count. 200 means the endpoint accepted the app; 403 usually means it looked
+client id), so endpoints that only need "a user" let it through. When the Consumer is a Platform
+App, a Role listed in an endpoint's Resource Doc is checked against the Consumer's Scopes; an
+endpoint that checks a user's Entitlements in its own code still refuses the app. 200 means the endpoint accepted the app; 403 usually means it looked
 for Entitlements (or a Scope the Consumer doesn't hold yet); 401 means it wanted a real user.
 
 Needs, in the environment or .env:
@@ -76,7 +76,7 @@ def main():
 		("Bank (public)", f"/obp/v6.0.0/banks/{space or 'SYS'}", "200 (404 at system level)"),
 		("Entity definitions v7.0.0", f"/obp/v7.0.0/{definitions}", "200 with the Scope CanGetDynamicEntityDefinitions"),
 		("Entity definitions v6.0.0", f"/obp/v6.0.0/{definitions}", "403: UserOnly"),
-		("Entity records (unversioned)", records, f"403 unless {args.entity} has auth_mode UserOrApplication and the Scope"),
+		("Entity records (unversioned)", records, f"200 with the Scope CanGetDynamicEntityRecord_{args.entity}"),
 		("Entity records v7.0.0", f"/obp/v7.0.0/banks/{bank}/dynamic-entities/{args.entity}", "same as above"),
 		("Users", "/obp/v6.0.0/users?limit=1", "403: UserOnly"),
 		("Groups", "/obp/v6.0.0/management/groups", "403: checked against Entitlements"),

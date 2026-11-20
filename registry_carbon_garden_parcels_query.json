@@ -1,0 +1,20 @@
+{
+  "from": "parcel_activity",
+  "select": [
+    "activity_id",
+    "parcel_id"
+  ],
+  "join": [
+    {
+      "entity": "parcel",
+      "on": "parcel_id",
+      "fields": {
+        "multipolygon_coordinates": "multipolygon_coordinates"
+      }
+    }
+  ],
+  "envelope": {
+    "rows": "parcels",
+    "count": "count"
+  }
+}

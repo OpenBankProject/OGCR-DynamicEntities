@@ -10,7 +10,7 @@ The OGCR registry records carbon activities, parcels, verifications and certific
 - **Decoupled apps.** OGCR-App, the Operator Platform and the Certification Platform are separate apps that use the API and OIDC for authentication.
 - **OAuth2 / OIDC.** People log in with an OpenID Connect provider, and apps and services call the API with OAuth2 tokens.
 - **RBAC.** Each operation on each entity needs a Role, and people get Roles through Role Groups.
-- **Platform Apps.** Services that work without a person, such as the chain cache and OBP Senti, call the API as themselves, with Scopes granted to their Consumer. The tokenizer will move to Platform App mode too. See the "Platform Apps" Glossary Item.
+- **Platform Apps.** Services that work without a person, such as the tokenizer, the chain cache and OBP Senti, call the API as themselves, with Scopes granted to their Consumer. See the "Platform Apps" Glossary Item.
 - **Dockerised deployment.** Each service is built as a Docker image and deployed on Kubernetes.
 
 ### The big picture

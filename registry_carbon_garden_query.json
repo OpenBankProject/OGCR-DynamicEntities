@@ -1,0 +1,73 @@
+{
+  "from": "activity",
+  "select": [
+    "activity_id",
+    "name",
+    "summary",
+    "activity_type",
+    "unit_types",
+    "city",
+    "country_id",
+    "multipolygon_coordinates",
+    "start_date",
+    "end_date"
+  ],
+  "join": [
+    {
+      "entity": "activity_plan",
+      "on": "activity_id",
+      "cardinality": "many",
+      "as": "plans",
+      "fields": {
+        "date_submitted": "date_submitted",
+        "expected_total_carbon_removals": "expected_total_carbon_removals",
+        "expected_total_soil_emissions": "expected_total_soil_emissions",
+        "expected_net_benefit": "expected_net_benefit"
+      }
+    },
+    {
+      "entity": "certificate_of_compliance",
+      "on": "activity_id",
+      "cardinality": "many",
+      "as": "certificates",
+      "fields": {
+        "certification_status": "certification_status",
+        "issue_date": "issue_date",
+        "expiry_date": "expiry_date",
+        "permanent_net_carbon_removal_benefit": "permanent_net_carbon_removal_benefit",
+        "carbon_farming_temporary_net_carbon_removal_benefit": "carbon_farming_temporary_net_carbon_removal_benefit",
+        "carbon_farming_net_soil_emission_reduction_benefit": "carbon_farming_net_soil_emission_reduction_benefit",
+        "carbon_storage_temporary_net_carbon_removal_benefit": "carbon_storage_temporary_net_carbon_removal_benefit"
+      }
+    },
+    {
+      "entity": "activity_verification",
+      "on": "activity_id",
+      "cardinality": "many",
+      "as": "verifications",
+      "fields": {
+        "parcel_id": "parcel_id",
+        "status_code": "status_code",
+        "permanent_net_carbon_removal_benefit": "permanent_net_carbon_removal_benefit",
+        "carbon_farming_temporary_net_carbon_removal_benefit": "carbon_farming_temporary_net_carbon_removal_benefit",
+        "carbon_farming_net_soil_emission_reduction_benefit": "carbon_farming_net_soil_emission_reduction_benefit",
+        "carbon_storage_temporary_net_carbon_removal_benefit": "carbon_storage_temporary_net_carbon_removal_benefit"
+      }
+    },
+    {
+      "entity": "carbon_credit_batch",
+      "on": "activity_id",
+      "cardinality": "many",
+      "as": "batches",
+      "fields": {
+        "amount": "amount",
+        "status_code": "status_code",
+        "issue_date": "issue_date"
+      }
+    }
+  ],
+  "envelope": {
+    "rows": "activities",
+    "count": "count"
+  }
+}

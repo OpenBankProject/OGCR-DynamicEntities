@@ -10,7 +10,7 @@ The OGCR registry records carbon activities, parcels, verifications and certific
 - **Decoupled apps.** OGCR-App, the Operator Platform and the Certification Platform are separate apps that use the API and OIDC for authentication.
 - **OAuth2 / OIDC.** People log in with an OpenID Connect provider, and apps and services call the API with OAuth2 tokens.
 - **RBAC.** Each operation on each entity needs a Role, and people get Roles through Role Groups.
-- **Platform Apps.** Services that work without a person, such as the tokenizer, the chain cache and OBP Senti, call the API as themselves, with Scopes granted to their Consumer. See the "Platform Apps" Glossary Item.
+- **Platform Apps.** Services that work without a person, such as the tokenizer, the chain cache and Senti, call the API as themselves, with Scopes granted to their Consumer. See the "Platform Apps" Glossary Item.
 - **Dockerised deployment.** Each service is built as a Docker image and deployed on Kubernetes.
 
 ### The big picture
@@ -92,7 +92,7 @@ Every repository, with what it does. The OGCR DCR product site (https://ogcr-dcr
 - [OBP Keycloak Provider](https://github.com/OpenBankProject/OBP-Keycloak-Provider): Lets Keycloak log people in with their OBP-API accounts
 - [OBP-MCP server](https://github.com/OpenBankProject/OBP-MCP): MCP server for AI agents
 - [Opey Agent](https://github.com/OpenBankProject/OBP-Opey-II): OBP's AI assistant
-- [OBP Senti](https://github.com/OpenBankProject/OBP-Sentinel): Agentic security and performance checking
+- [Senti configured for OBP](https://github.com/TESOBE/Senti): Agentic security and performance checking
 - [OBP Portal and API Manager](https://github.com/OpenBankProject/OBP-Frontend): Consumer registration and administration
 - [API Explorer II](https://github.com/OpenBankProject/API-Explorer-II): Browse and try the registry's endpoints
 - [OGCR-Charts](https://github.com/TESOBE/OGCR-Charts): Helm charts to deploy the OGCR platform on Kubernetes

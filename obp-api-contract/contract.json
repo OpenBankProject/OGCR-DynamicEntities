@@ -1,0 +1,1107 @@
+{
+ "about": "Every OBP-API call the scripts make: verb, path (OBP placeholders in capitals), the source file, the text that makes the call (needles) and the response fields the scripts read. The paths of entities and their records follow OBP_ENTITY_SPACE_ID: at system level they are .../system-dynamic-entities and /obp/dynamic-entity/ENTITY, in a bank they are .../banks/BANK_ID/dynamic-entities and /obp/dynamic-entity/banks/BANK_ID/ENTITY, and each call is listed once with the paths of both where it can use either. A call through obp_space.management_path or record_path is listed with the paths that function builds. The reads are kept by hand. obp-api-contract/snapshot.json is what an OBP-API documents for these calls, written by obp-api-contract/snapshot.py. tests/test_obp_api_contract.py checks this list against the source and the snapshot.",
+ "version_policy": "Each call writes the OBP-API version it needs in its own path. One configured version cannot serve them all, because an endpoint exists only in the versions OBP-API documents it for. tests/test_obp_api_contract.py checks every call against the endpoint documented for the version it names, and tests/test_obp_api_version.py fails on any version below v5.1.0 in the scripts and the documents. To move a call to a newer version, change its path and run snapshot.py again.",
+ "calls": [
+  {
+   "verb": "POST",
+   "path": "/my/logins/direct",
+   "source": "obp_client.py",
+   "needles": [
+    "url = obp_api_host + \"/my/logins/direct\"",
+    "req = session.post(url, headers=headers, json=payload, verify=verify)"
+   ],
+   "reads": [
+    "token"
+   ],
+   "undocumented_endpoint": "the unversioned DirectLogin route has no resource doc; OBP-API documents DirectLogin as POST /obp/v6.0.0/my/logins/direct"
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/root",
+   "source": "obp_client.py",
+   "needles": [
+    "url = f\"{base_url}/obp/v6.0.0/root\"",
+    "response = session.get(url, timeout=10)"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "POST",
+   "path": "/my/logins/direct",
+   "source": "check_login_and_roles.py",
+   "needles": [
+    "url = f\"{host}/my/logins/direct\"",
+    "response = requests.post(url, headers=headers, timeout=30)"
+   ],
+   "reads": [
+    "token"
+   ],
+   "undocumented_endpoint": "the unversioned DirectLogin route has no resource doc; OBP-API documents DirectLogin as POST /obp/v6.0.0/my/logins/direct"
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/users/current",
+   "source": "check_login_and_roles.py",
+   "needles": [
+    "url = f\"{host}/obp/v6.0.0/users/current\"",
+    "response = requests.get(url, headers=headers, timeout=30)"
+   ],
+   "reads": [
+    "user_id",
+    "username",
+    "provider",
+    "entitlements.list[].role_name",
+    "entitlements.list[].bank_id"
+   ]
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/banks/BANK_ID",
+   "source": "check_login_and_roles.py",
+   "needles": [
+    "url = f\"{host}/obp/v6.0.0/banks/{SPACE_ID}\"",
+    "response = requests.get(url, headers={'Authorization': f\"DirectLogin token={token}\"}, timeout=30)"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/consumers/current/scopes",
+   "source": "check_client_credentials.py",
+   "needles": [
+    "scopes = requests.get(f\"{host}/obp/v7.0.0/consumers/current/scopes\", headers=headers, timeout=20)"
+   ],
+   "reads": [
+    "scopes",
+    "scopes[].role_name"
+   ]
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/users/current",
+   "source": "check_client_credentials.py",
+   "needles": [
+    "me = requests.get(f\"{host}/obp/v6.0.0/users/current\", headers=headers, timeout=20)"
+   ],
+   "reads": [
+    "username"
+   ]
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/api/glossary/OGCR-Architecture",
+   "source": "check_client_credentials.py",
+   "needles": [
+    "\"/obp/v7.0.0/api/glossary/OGCR-Architecture\"",
+    "response = requests.get(f\"{host}{path}\", headers=headers, timeout=30)"
+   ],
+   "reads": [],
+   "note": "One line of the table of probes that check_client_credentials.py sends with the app's own token; only the status code is read."
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/banks/BANK_ID",
+   "source": "check_client_credentials.py",
+   "needles": [
+    "f\"/obp/v6.0.0/banks/{space or 'SYS'}\"",
+    "response = requests.get(f\"{host}{path}\", headers=headers, timeout=30)"
+   ],
+   "reads": [],
+   "note": "One line of the table of probes that check_client_credentials.py sends with the app's own token; only the status code is read."
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/management/system-dynamic-entities",
+   "source": "check_client_credentials.py",
+   "needles": [
+    "definitions = f\"management/banks/{space}/dynamic-entities\" if space else \"management/system-dynamic-entities\"",
+    "f\"/obp/v7.0.0/{definitions}\"",
+    "response = requests.get(f\"{host}{path}\", headers=headers, timeout=30)"
+   ],
+   "reads": [],
+   "note": "One line of the table of probes that check_client_credentials.py sends with the app's own token; only the status code is read."
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/management/banks/BANK_ID/dynamic-entities",
+   "source": "check_client_credentials.py",
+   "needles": [
+    "definitions = f\"management/banks/{space}/dynamic-entities\" if space else \"management/system-dynamic-entities\"",
+    "f\"/obp/v7.0.0/{definitions}\"",
+    "response = requests.get(f\"{host}{path}\", headers=headers, timeout=30)"
+   ],
+   "reads": [],
+   "note": "One line of the table of probes that check_client_credentials.py sends with the app's own token; only the status code is read."
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/management/system-dynamic-entities",
+   "source": "check_client_credentials.py",
+   "needles": [
+    "definitions = f\"management/banks/{space}/dynamic-entities\" if space else \"management/system-dynamic-entities\"",
+    "f\"/obp/v6.0.0/{definitions}\"",
+    "response = requests.get(f\"{host}{path}\", headers=headers, timeout=30)"
+   ],
+   "reads": [],
+   "note": "One line of the table of probes that check_client_credentials.py sends with the app's own token; only the status code is read."
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/management/banks/BANK_ID/dynamic-entities",
+   "source": "check_client_credentials.py",
+   "needles": [
+    "definitions = f\"management/banks/{space}/dynamic-entities\" if space else \"management/system-dynamic-entities\"",
+    "f\"/obp/v6.0.0/{definitions}\"",
+    "response = requests.get(f\"{host}{path}\", headers=headers, timeout=30)"
+   ],
+   "reads": [],
+   "note": "One line of the table of probes that check_client_credentials.py sends with the app's own token; only the status code is read."
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/dynamic-entity/ENTITY",
+   "source": "check_client_credentials.py",
+   "needles": [
+    "records = f\"/obp/dynamic-entity/banks/{space}/{args.entity}\" if space else f\"/obp/dynamic-entity/{args.entity}\"",
+    "response = requests.get(f\"{host}{path}\", headers=headers, timeout=30)"
+   ],
+   "reads": [],
+   "undocumented_endpoint": "dynamic entity, defined at run time"
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/dynamic-entity/banks/BANK_ID/ENTITY",
+   "source": "check_client_credentials.py",
+   "needles": [
+    "records = f\"/obp/dynamic-entity/banks/{space}/{args.entity}\" if space else f\"/obp/dynamic-entity/{args.entity}\"",
+    "response = requests.get(f\"{host}{path}\", headers=headers, timeout=30)"
+   ],
+   "reads": [],
+   "undocumented_endpoint": "dynamic entity, defined at run time"
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/banks/BANK_ID/dynamic-entities/ENTITY",
+   "source": "check_client_credentials.py",
+   "needles": [
+    "f\"/obp/v7.0.0/banks/{bank}/dynamic-entities/{args.entity}\"",
+    "response = requests.get(f\"{host}{path}\", headers=headers, timeout=30)"
+   ],
+   "reads": [],
+   "undocumented_endpoint": "dynamic entity, defined at run time"
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/users",
+   "source": "check_client_credentials.py",
+   "needles": [
+    "\"/obp/v6.0.0/users?limit=1\"",
+    "response = requests.get(f\"{host}{path}\", headers=headers, timeout=30)"
+   ],
+   "reads": [],
+   "note": "One line of the table of probes that check_client_credentials.py sends with the app's own token; only the status code is read."
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/management/groups",
+   "source": "check_client_credentials.py",
+   "needles": [
+    "\"/obp/v6.0.0/management/groups\"",
+    "response = requests.get(f\"{host}{path}\", headers=headers, timeout=30)"
+   ],
+   "reads": [],
+   "note": "One line of the table of probes that check_client_credentials.py sends with the app's own token; only the status code is read."
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v5.1.0/management/dynamic-resource-docs",
+   "source": "check_client_credentials.py",
+   "needles": [
+    "\"/obp/v5.1.0/management/dynamic-resource-docs\"",
+    "response = requests.get(f\"{host}{path}\", headers=headers, timeout=30)"
+   ],
+   "reads": [],
+   "note": "One line of the table of probes that check_client_credentials.py sends with the app's own token; only the status code is read."
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/dynamic-entity/ENTITY",
+   "source": "check_indexing.py",
+   "needles": [
+    "resp = session.get(f\"{HOST}{record_path(entity)}\", params=params, headers=headers())"
+   ],
+   "reads": [],
+   "note": "With a bank space the path is /obp/dynamic-entity/banks/BANK_ID/ENTITY.",
+   "undocumented_endpoint": "dynamic entity, defined at run time"
+  },
+  {
+   "verb": "POST",
+   "path": "/obp/v7.0.0/management/dynamic-resource-docs/explain",
+   "source": "check_indexing.py",
+   "needles": [
+    "EXPLAIN_URL = \"/obp/v7.0.0/management/dynamic-resource-docs/explain\"",
+    "resp = session.post(f\"{HOST}{EXPLAIN_URL}\", headers=headers(), json=body)"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/resource-docs/API_VERSION/openapi",
+   "source": "check_openapi_field_types.py",
+   "needles": [
+    "OPENAPI_PATH = \"/obp/v7.0.0/resource-docs/OBPv7.0.0/openapi.yaml?content=dynamic\"",
+    "response = session.get(url, timeout=300)"
+   ],
+   "reads": [],
+   "note": "API_VERSION is OBPv7.0.0 and the script asks for the .yaml form of the answer with ?content=dynamic. OBP-API documents the endpoint as OBPv1.4.0-getResourceDocsOpenAPI31 and a later version serves it too. The answer is an OpenAPI document that the script parses itself."
+  },
+  {
+   "verb": "POST",
+   "path": "/obp/v7.0.0/users/USER_ID/entitlements",
+   "source": "create_entitlements.py",
+   "needles": [
+    "response = session.post(f\"{obp_host}/obp/v7.0.0/users/{user_id}/entitlements\","
+   ],
+   "reads": []
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/users/current",
+   "source": "create_entitlements.py",
+   "needles": [
+    "response = session.get(f\"{obp_host}/obp/v6.0.0/users/current\","
+   ],
+   "reads": [
+    "user_id",
+    "username",
+    "provider",
+    "entitlements.list[].role_name",
+    "entitlements.list[].bank_id"
+   ]
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/users",
+   "source": "grant_user_dynamic_entity_roles.py",
+   "needles": [
+    "response = session.get(f\"{obp_host}/obp/v6.0.0/users\", params=params, headers=H, timeout=30)"
+   ],
+   "reads": [
+    "users",
+    "users[].user_id",
+    "users[].entitlements.list[].role_name"
+   ]
+  },
+  {
+   "verb": "POST",
+   "path": "/obp/v7.0.0/users/USER_ID/entitlements",
+   "source": "grant_user_dynamic_entity_roles.py",
+   "needles": [
+    "r = session.post(f\"{obp_host}/obp/v7.0.0/users/{user['user_id']}/entitlements\","
+   ],
+   "reads": []
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/users",
+   "source": "show_user_dynamic_entity_paths.py",
+   "needles": [
+    "response = session.get(f\"{obp_host}/obp/v6.0.0/users\", params=params, headers=H, timeout=30)"
+   ],
+   "reads": [
+    "users",
+    "users[].user_id",
+    "users[].entitlements.list[].role_name",
+    "users[].entitlements.list[].bank_id"
+   ]
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/management/banks/BANK_ID/dynamic-entities",
+   "source": "show_user_dynamic_entity_paths.py",
+   "needles": [
+    "r = session.get(f\"{obp_host}/obp/v7.0.0/management/banks/{bank_id}/dynamic-entities\", headers=H, timeout=30)",
+    "return \"/obp/dynamic-entity\" + (\"\" if bank_id == \"SYS\" else f\"/banks/{bank_id}\")",
+    "return f\"/obp/v7.0.0/banks/{bank_id}/dynamic-entities\""
+   ],
+   "reads": [
+    "dynamic_entities"
+   ],
+   "note": "The script lists the entity definitions of each bank, then prints the record paths a user's Roles open."
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/users",
+   "source": "show_user_dynamic_entity_roles.py",
+   "needles": [
+    "response = session.get(f\"{obp_host}/obp/v6.0.0/users\", params=params,"
+   ],
+   "reads": [
+    "users",
+    "users[].user_id",
+    "users[].entitlements.list[].role_name",
+    "users[].entitlements.list[].bank_id"
+   ]
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/users/current",
+   "source": "dry_run_recreate_dynamic_entities.py",
+   "needles": [
+    "user = session.get(f\"{obp_host}/obp/v6.0.0/users/current\","
+   ],
+   "reads": [
+    "user_id",
+    "username",
+    "provider",
+    "entitlements.list[].role_name",
+    "entitlements.list[].bank_id"
+   ]
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/users/current",
+   "source": "setup_local.sh",
+   "needles": [
+    "me = session.get(f\"{obp_host}/obp/v6.0.0/users/current\", headers=headers)"
+   ],
+   "reads": [
+    "user_id",
+    "username",
+    "provider",
+    "entitlements.list[].role_name",
+    "entitlements.list[].bank_id"
+   ]
+  },
+  {
+   "verb": "POST",
+   "path": "/obp/v7.0.0/users/USER_ID/entitlements",
+   "source": "setup_local.sh",
+   "needles": [
+    "r = session.post(f\"{obp_host}/obp/v7.0.0/users/{user_id}/entitlements\", headers=headers,"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/banks/BANK_ID",
+   "source": "create_space_bank.py",
+   "needles": [
+    "response = session.get(f\"{obp_host}/obp/v6.0.0/banks/{bank_id}\","
+   ],
+   "reads": []
+  },
+  {
+   "verb": "POST",
+   "path": "/obp/v6.0.0/banks",
+   "source": "create_space_bank.py",
+   "needles": [
+    "response = session.post(f\"{obp_host}/obp/v6.0.0/banks\", json=body,"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v5.1.0/management/system-dynamic-entities",
+   "source": "obp_dynamic_api.py",
+   "needles": [
+    "url = f\"{base_url}{management_path('v5.1.0')}\"",
+    "resp = session.get(url, headers=headers)"
+   ],
+   "reads": [
+    "dynamic_entities",
+    "dynamic_entities[].dynamicEntityId"
+   ]
+  },
+  {
+   "verb": "POST",
+   "path": "/obp/v5.1.0/management/system-dynamic-entities",
+   "source": "obp_dynamic_api.py",
+   "needles": [
+    "url = f\"{base_url}{management_path('v5.1.0')}\"",
+    "resp = session.post(url, headers=headers, json=entity_definition)"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "PUT",
+   "path": "/obp/v5.1.0/management/system-dynamic-entities/DYNAMIC_ENTITY_ID",
+   "source": "obp_dynamic_api.py",
+   "needles": [
+    "url = f\"{base_url}{management_path('v5.1.0')}/{dynamic_entity_id}\"",
+    "resp = session.put(url, headers=headers, json=entity_definition)"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v5.1.0/management/banks/BANK_ID/dynamic-entities",
+   "source": "obp_dynamic_api.py",
+   "needles": [
+    "url = f\"{base_url}{management_path('v5.1.0')}\"",
+    "resp = session.get(url, headers=headers)"
+   ],
+   "reads": [
+    "dynamic_entities",
+    "dynamic_entities[].dynamicEntityId"
+   ]
+  },
+  {
+   "verb": "POST",
+   "path": "/obp/v5.1.0/management/banks/BANK_ID/dynamic-entities",
+   "source": "obp_dynamic_api.py",
+   "needles": [
+    "url = f\"{base_url}{management_path('v5.1.0')}\"",
+    "resp = session.post(url, headers=headers, json=entity_definition)"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "PUT",
+   "path": "/obp/v5.1.0/management/banks/BANK_ID/dynamic-entities/DYNAMIC_ENTITY_ID",
+   "source": "obp_dynamic_api.py",
+   "needles": [
+    "url = f\"{base_url}{management_path('v5.1.0')}/{dynamic_entity_id}\"",
+    "resp = session.put(url, headers=headers, json=entity_definition)"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/management/system-dynamic-entities",
+   "source": "diff_entities.py",
+   "needles": [
+    "url = f\"{obp_host}/obp/v6.0.0/management/system-dynamic-entities\"",
+    "response = session.get(url, headers={\"Authorization\": authorization(token)}, timeout=60)"
+   ],
+   "reads": [
+    "dynamic_entities"
+   ]
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/management/banks/BANK_ID/dynamic-entities",
+   "source": "diff_entities.py",
+   "needles": [
+    "url = f\"{obp_host}/obp/v6.0.0/management/banks/{bank_id}/dynamic-entities\"",
+    "response = session.get(url, headers={\"Authorization\": authorization(token)}, timeout=60)"
+   ],
+   "reads": [
+    "dynamic_entities"
+   ]
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/management/system-dynamic-entities",
+   "source": "get_and_delete_dynamic_entities.py",
+   "needles": [
+    "url = f\"{BASE_URL}{management_path('v6.0.0')}\"",
+    "response = session.get(url, headers=headers)"
+   ],
+   "reads": [
+    "dynamic_entities"
+   ]
+  },
+  {
+   "verb": "DELETE",
+   "path": "/obp/v6.0.0/management/system-dynamic-entities/DYNAMIC_ENTITY_ID",
+   "source": "get_and_delete_dynamic_entities.py",
+   "needles": [
+    "url = f\"{BASE_URL}{management_path('v6.0.0')}/{entity_id}\"",
+    "response = session.delete(url, headers=headers)"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/management/banks/BANK_ID/dynamic-entities",
+   "source": "get_and_delete_dynamic_entities.py",
+   "needles": [
+    "url = f\"{BASE_URL}{management_path('v6.0.0')}\"",
+    "response = session.get(url, headers=headers)"
+   ],
+   "reads": [
+    "dynamic_entities"
+   ]
+  },
+  {
+   "verb": "DELETE",
+   "path": "/obp/v6.0.0/management/banks/BANK_ID/dynamic-entities/DYNAMIC_ENTITY_ID",
+   "source": "get_and_delete_dynamic_entities.py",
+   "needles": [
+    "url = f\"{BASE_URL}{management_path('v6.0.0')}/{entity_id}\"",
+    "response = session.delete(url, headers=headers)"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/dynamic-entity/ENTITY",
+   "source": "get_and_delete_dynamic_entities.py",
+   "needles": [
+    "url = f\"{BASE_URL}{record_path(entity_name)}\"",
+    "response = session.get(url, headers=headers)"
+   ],
+   "reads": [],
+   "note": "With a bank space the path is /obp/dynamic-entity/banks/BANK_ID/ENTITY.",
+   "undocumented_endpoint": "dynamic entity, defined at run time"
+  },
+  {
+   "verb": "DELETE",
+   "path": "/obp/dynamic-entity/ENTITY/RECORD_ID",
+   "source": "get_and_delete_dynamic_entities.py",
+   "needles": [
+    "url = f\"{BASE_URL}{record_path(entity_name)}/{object_id}\"",
+    "response = session.delete(url, headers=headers)"
+   ],
+   "reads": [],
+   "note": "With a bank space the path is /obp/dynamic-entity/banks/BANK_ID/ENTITY/RECORD_ID.",
+   "undocumented_endpoint": "dynamic entity, defined at run time"
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/dynamic-entity/ENTITY",
+   "source": "create_example_data.py",
+   "needles": [
+    "url = f\"{BASE_URL}{record_path(entity_name)}\"",
+    "response = session.get(url, headers=headers)"
+   ],
+   "reads": [
+    "ENTITY_list"
+   ],
+   "note": "ENTITY_list stands for <entity>_list. With a bank space the path is /obp/dynamic-entity/banks/BANK_ID/ENTITY.",
+   "undocumented_endpoint": "dynamic entity, defined at run time"
+  },
+  {
+   "verb": "POST",
+   "path": "/obp/dynamic-entity/ENTITY",
+   "source": "create_example_data.py",
+   "needles": [
+    "url = f\"{BASE_URL}{record_path(entity_name)}\"",
+    "response = session.post(url, headers=headers, json=data)"
+   ],
+   "reads": [],
+   "undocumented_endpoint": "dynamic entity, defined at run time"
+  },
+  {
+   "verb": "POST",
+   "path": "/obp/dynamic-entity/ENTITY",
+   "source": "example_data_creation_log_helpers.py",
+   "needles": [
+    "url = f\"{base_url}{record_path(LOG_ENTITY_NAME)}\"",
+    "resp = session.post(url, headers=headers, json=record)"
+   ],
+   "reads": [],
+   "undocumented_endpoint": "dynamic entity, defined at run time"
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/dynamic-entity/ENTITY",
+   "source": "create_registry_demo_data.py",
+   "needles": [
+    "url = f\"{obp_host}{record_path(entity_name)}\"",
+    "response = session.get(url, headers=headers(token))"
+   ],
+   "reads": [
+    "ENTITY_list"
+   ],
+   "note": "ENTITY_list stands for <entity>_list.",
+   "undocumented_endpoint": "dynamic entity, defined at run time"
+  },
+  {
+   "verb": "PATCH",
+   "path": "/obp/v7.0.0/banks/BANK_ID/dynamic-entities/ENTITY/RECORD_ID",
+   "source": "create_registry_demo_data.py",
+   "needles": [
+    "url = f\"{obp_host}/obp/v7.0.0/banks/{SPACE_ID or 'SYS'}/dynamic-entities/{entity_name}/{record_id}\"",
+    "response = session.patch(url, headers=headers(token), json=values, timeout=60)"
+   ],
+   "reads": [],
+   "undocumented_endpoint": "dynamic entity, defined at run time"
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/banks/BANK_ID/dynamic-entities/ENTITY/RECORD_ID",
+   "source": "patch_record.py",
+   "needles": [
+    "return f\"{obp_host}/obp/v7.0.0/banks/{bank_id}/dynamic-entities/{entity}/{record_id}\"",
+    "response = session.get(url, headers=headers, timeout=60)"
+   ],
+   "reads": [],
+   "undocumented_endpoint": "dynamic entity, defined at run time"
+  },
+  {
+   "verb": "PATCH",
+   "path": "/obp/v7.0.0/banks/BANK_ID/dynamic-entities/ENTITY/RECORD_ID",
+   "source": "patch_record.py",
+   "needles": [
+    "return f\"{obp_host}/obp/v7.0.0/banks/{bank_id}/dynamic-entities/{entity}/{record_id}\"",
+    "response = session.patch(url, headers=headers, json=todo, timeout=60)"
+   ],
+   "reads": [],
+   "undocumented_endpoint": "dynamic entity, defined at run time"
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/banks/SYS/dynamic-entities/ENTITY",
+   "source": "publish_architecture_page.py",
+   "needles": [
+    "RECORDS_URL = f\"{obp_host}/obp/v7.0.0/banks/SYS/dynamic-entities/{ENTITY}\"",
+    "response = session.get(RECORDS_URL, headers=headers())"
+   ],
+   "reads": [],
+   "undocumented_endpoint": "dynamic entity, defined at run time"
+  },
+  {
+   "verb": "POST",
+   "path": "/obp/v7.0.0/banks/SYS/dynamic-entities/ENTITY",
+   "source": "publish_architecture_page.py",
+   "needles": [
+    "RECORDS_URL = f\"{obp_host}/obp/v7.0.0/banks/SYS/dynamic-entities/{ENTITY}\"",
+    "response = session.post(RECORDS_URL, headers=headers(), json=record)"
+   ],
+   "reads": [],
+   "undocumented_endpoint": "dynamic entity, defined at run time"
+  },
+  {
+   "verb": "PUT",
+   "path": "/obp/v7.0.0/banks/SYS/dynamic-entities/ENTITY/RECORD_ID",
+   "source": "publish_architecture_page.py",
+   "needles": [
+    "RECORDS_URL = f\"{obp_host}/obp/v7.0.0/banks/SYS/dynamic-entities/{ENTITY}\"",
+    "response = session.put(f\"{RECORDS_URL}/{page_id}\", headers=headers(), json=record)"
+   ],
+   "reads": [],
+   "undocumented_endpoint": "dynamic entity, defined at run time"
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/api/glossary/TITLE",
+   "source": "publish_architecture_glossary_item.py",
+   "needles": [
+    "GLOSSARY_URL = f\"{obp_host}/obp/v7.0.0/api/glossary\"",
+    "response = session.get(item_url(title), headers=headers(), params={\"expanded\": \"false\"})"
+   ],
+   "reads": [
+    "description"
+   ]
+  },
+  {
+   "verb": "POST",
+   "path": "/obp/v7.0.0/api/glossary",
+   "source": "publish_architecture_glossary_item.py",
+   "needles": [
+    "GLOSSARY_URL = f\"{obp_host}/obp/v7.0.0/api/glossary\"",
+    "response = session.post(GLOSSARY_URL, headers=headers(), json={\"title\": args.title, \"description\": local})"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "PUT",
+   "path": "/obp/v7.0.0/api/glossary/TITLE",
+   "source": "publish_architecture_glossary_item.py",
+   "needles": [
+    "GLOSSARY_URL = f\"{obp_host}/obp/v7.0.0/api/glossary\"",
+    "response = session.put(item_url(args.title), headers=headers(), json={\"description\": local})"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/management/banks/BANK_ID/domain-apis",
+   "source": "domain_api.py",
+   "needles": [
+    "return f\"{obp_host}/obp/v7.0.0/management/banks/{ROLE_BANK_ID}/domain-apis\"",
+    "response = _check(session.get(domain_apis_url(), headers={\"Authorization\": authorization(token)}, timeout=30),"
+   ],
+   "reads": [
+    "domain_apis",
+    "domain_apis[].base_path",
+    "domain_apis[].domain_api_id"
+   ]
+  },
+  {
+   "verb": "POST",
+   "path": "/obp/v7.0.0/management/banks/BANK_ID/domain-apis",
+   "source": "domain_api.py",
+   "needles": [
+    "return f\"{obp_host}/obp/v7.0.0/management/banks/{ROLE_BANK_ID}/domain-apis\"",
+    "response = _check(session.post(domain_apis_url(), json=body,"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "PUT",
+   "path": "/obp/v7.0.0/management/banks/BANK_ID/domain-apis/DOMAIN_API_ID",
+   "source": "domain_api.py",
+   "needles": [
+    "return f\"{obp_host}/obp/v7.0.0/management/banks/{ROLE_BANK_ID}/domain-apis\"",
+    "response = _check(session.put(f\"{domain_apis_url()}/{existing['domain_api_id']}\", json=body,"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "DELETE",
+   "path": "/obp/v7.0.0/management/banks/BANK_ID/domain-apis/DOMAIN_API_ID",
+   "source": "domain_api.py",
+   "needles": [
+    "return f\"{obp_host}/obp/v7.0.0/management/banks/{ROLE_BANK_ID}/domain-apis\"",
+    "_check(session.delete(f\"{domain_apis_url()}/{existing['domain_api_id']}\","
+   ],
+   "reads": []
+  },
+  {
+   "verb": "GET",
+   "path": "/BASE_PATH/openapi.json",
+   "source": "domain_api.py",
+   "needles": [
+    "url = f\"{obp_host}/{base_path}/openapi.json\"",
+    "status = session.get(url, timeout=30).status_code",
+    "url = f\"{obp_host}/{args.base_path}/openapi.json\"",
+    "while (status := session.get(url, timeout=30).status_code) == 200 and time.time() < deadline:"
+   ],
+   "reads": [],
+   "note": "The script only reads the status code, to see when a Domain API starts or stops being served.",
+   "undocumented_endpoint": "served by the Domain API itself under its own base path, so it has no resource doc"
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v5.1.0/management/dynamic-resource-docs",
+   "source": "dynamic_resource_docs.py",
+   "needles": [
+    "return f\"{host}/obp/v5.1.0/management/banks/{doc['bank_id']}/dynamic-resource-docs\"",
+    "return f\"{host}/obp/v5.1.0/management/dynamic-resource-docs\"",
+    "resp = session.get(url, headers=_headers(token))",
+    "resp = session.get(management_url(host, {\"bank_id\": bank}), headers=_headers(token))"
+   ],
+   "reads": [
+    "dynamic-resource-docs",
+    "dynamic-resource-docs[].dynamic_resource_doc_id",
+    "dynamic-resource-docs[].request_verb",
+    "dynamic-resource-docs[].request_url"
+   ]
+  },
+  {
+   "verb": "POST",
+   "path": "/obp/v5.1.0/management/dynamic-resource-docs",
+   "source": "dynamic_resource_docs.py",
+   "needles": [
+    "return f\"{host}/obp/v5.1.0/management/banks/{doc['bank_id']}/dynamic-resource-docs\"",
+    "return f\"{host}/obp/v5.1.0/management/dynamic-resource-docs\"",
+    "resp = session.post(management_url(host, doc), headers=_headers(token), json=build_payload(doc))"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "PUT",
+   "path": "/obp/v5.1.0/management/dynamic-resource-docs/DOC_ID",
+   "source": "dynamic_resource_docs.py",
+   "needles": [
+    "return f\"{host}/obp/v5.1.0/management/banks/{doc['bank_id']}/dynamic-resource-docs\"",
+    "return f\"{host}/obp/v5.1.0/management/dynamic-resource-docs\"",
+    "url = f\"{management_url(host, doc)}/{doc_id}\"",
+    "resp = session.put(url, headers=_headers(token), json=build_payload(doc))"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "DELETE",
+   "path": "/obp/v5.1.0/management/dynamic-resource-docs/DOC_ID",
+   "source": "dynamic_resource_docs.py",
+   "needles": [
+    "return f\"{host}/obp/v5.1.0/management/banks/{doc['bank_id']}/dynamic-resource-docs\"",
+    "return f\"{host}/obp/v5.1.0/management/dynamic-resource-docs\"",
+    "url = f\"{management_url(host, doc)}/{doc_id}\"",
+    "resp = session.delete(url, headers=_headers(token))"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v5.1.0/management/banks/BANK_ID/dynamic-resource-docs",
+   "source": "dynamic_resource_docs.py",
+   "needles": [
+    "return f\"{host}/obp/v5.1.0/management/banks/{doc['bank_id']}/dynamic-resource-docs\"",
+    "return f\"{host}/obp/v5.1.0/management/dynamic-resource-docs\"",
+    "resp = session.get(url, headers=_headers(token))",
+    "resp = session.get(management_url(host, {\"bank_id\": bank}), headers=_headers(token))"
+   ],
+   "reads": [
+    "dynamic-resource-docs",
+    "dynamic-resource-docs[].dynamic_resource_doc_id",
+    "dynamic-resource-docs[].request_verb",
+    "dynamic-resource-docs[].request_url"
+   ]
+  },
+  {
+   "verb": "POST",
+   "path": "/obp/v5.1.0/management/banks/BANK_ID/dynamic-resource-docs",
+   "source": "dynamic_resource_docs.py",
+   "needles": [
+    "return f\"{host}/obp/v5.1.0/management/banks/{doc['bank_id']}/dynamic-resource-docs\"",
+    "return f\"{host}/obp/v5.1.0/management/dynamic-resource-docs\"",
+    "resp = session.post(management_url(host, doc), headers=_headers(token), json=build_payload(doc))"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "PUT",
+   "path": "/obp/v5.1.0/management/banks/BANK_ID/dynamic-resource-docs/DOC_ID",
+   "source": "dynamic_resource_docs.py",
+   "needles": [
+    "return f\"{host}/obp/v5.1.0/management/banks/{doc['bank_id']}/dynamic-resource-docs\"",
+    "return f\"{host}/obp/v5.1.0/management/dynamic-resource-docs\"",
+    "url = f\"{management_url(host, doc)}/{doc_id}\"",
+    "resp = session.put(url, headers=_headers(token), json=build_payload(doc))"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "DELETE",
+   "path": "/obp/v5.1.0/management/banks/BANK_ID/dynamic-resource-docs/DOC_ID",
+   "source": "dynamic_resource_docs.py",
+   "needles": [
+    "return f\"{host}/obp/v5.1.0/management/banks/{doc['bank_id']}/dynamic-resource-docs\"",
+    "return f\"{host}/obp/v5.1.0/management/dynamic-resource-docs\"",
+    "url = f\"{management_url(host, doc)}/{doc_id}\"",
+    "resp = session.delete(url, headers=_headers(token))"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v5.1.0/management/banks/BANK_ID/dynamic-entities",
+   "source": "dynamic_resource_docs.py",
+   "needles": [
+    "url = f\"{host}/obp/v5.1.0/management/banks/{doc['bank_id']}/dynamic-entities\"",
+    "url = f\"{host}/obp/v5.1.0/management/system-dynamic-entities\"",
+    "resp = session.get(url, headers=_headers(token))"
+   ],
+   "reads": [
+    "dynamic_entities"
+   ]
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v5.1.0/management/system-dynamic-entities",
+   "source": "dynamic_resource_docs.py",
+   "needles": [
+    "url = f\"{host}/obp/v5.1.0/management/banks/{doc['bank_id']}/dynamic-entities\"",
+    "url = f\"{host}/obp/v5.1.0/management/system-dynamic-entities\"",
+    "resp = session.get(url, headers=_headers(token))"
+   ],
+   "reads": [
+    "dynamic_entities"
+   ]
+  },
+  {
+   "verb": "POST",
+   "path": "/obp/v7.0.0/management/dynamic-resource-docs/compile",
+   "source": "dynamic_resource_docs.py",
+   "needles": [
+    "url = f\"{host}/obp/v7.0.0/management/dynamic-resource-docs/compile\"",
+    "resp = session.post(url, headers=_headers(token), json=build_payload(doc))"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/dynamic-endpoint/dynamic-resource-doc/REQUEST_URL",
+   "source": "dynamic_resource_docs.py",
+   "needles": [
+    "SERVED_PREFIX = \"/obp/dynamic-endpoint/dynamic-resource-doc\"",
+    "url = served_url(host, doc)",
+    "resp = session.get(url, headers=headers, timeout=60)",
+    "resp = session.get(url, headers=headers, timeout=60)"
+   ],
+   "reads": [],
+   "note": "The served path is the doc's own request_url. A doc in a bank is served under /obp/dynamic-endpoint/banks/BANK_ID/dynamic-resource-doc/REQUEST_URL.",
+   "undocumented_endpoint": "a Dynamic Resource Doc: the endpoint exists only once someone creates the doc"
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/dynamic-endpoint/banks/BANK_ID/dynamic-resource-doc/REQUEST_URL",
+   "source": "time_registry_query.py",
+   "needles": [
+    "return f\"{obp_host}/obp/dynamic-endpoint/banks/{SPACE_ID or 'SYS'}/dynamic-resource-doc{DOC['request_url']}\"",
+    "resp = session.get(url, headers=headers, timeout=120)"
+   ],
+   "reads": [],
+   "undocumented_endpoint": "a Dynamic Resource Doc: the endpoint exists only once someone creates the doc"
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/management/groups",
+   "source": "create_role_groups.py",
+   "needles": [
+    "GROUPS_URL = f\"{obp_host}/obp/v6.0.0/management/groups\"",
+    "response = session.get(GROUPS_URL, params={\"bank_id\": ROLE_BANK_ID}, headers=headers(), timeout=30)"
+   ],
+   "reads": [
+    "groups",
+    "groups[].group_id",
+    "groups[].group_name",
+    "groups[].list_of_roles"
+   ]
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/management/groups/GROUP_ID/entitlements",
+   "source": "create_role_groups.py",
+   "needles": [
+    "GROUPS_URL = f\"{obp_host}/obp/v6.0.0/management/groups\"",
+    "response = session.get(f\"{GROUPS_URL}/{group_id}/entitlements\", headers=headers(), timeout=30)"
+   ],
+   "reads": [
+    "entitlements"
+   ]
+  },
+  {
+   "verb": "POST",
+   "path": "/obp/v6.0.0/management/groups",
+   "source": "create_role_groups.py",
+   "needles": [
+    "GROUPS_URL = f\"{obp_host}/obp/v6.0.0/management/groups\"",
+    "response = session.post(GROUPS_URL, json={**body, \"bank_id\": ROLE_BANK_ID, \"group_description\": \"\"},"
+   ],
+   "reads": [
+    "group_id"
+   ]
+  },
+  {
+   "verb": "PUT",
+   "path": "/obp/v6.0.0/management/groups/GROUP_ID",
+   "source": "create_role_groups.py",
+   "needles": [
+    "GROUPS_URL = f\"{obp_host}/obp/v6.0.0/management/groups\"",
+    "response = session.put(f\"{GROUPS_URL}/{existing['group_id']}\", json=body,"
+   ],
+   "reads": []
+  },
+  {
+   "verb": "POST",
+   "path": "/obp/v7.0.0/management/groups/GROUP_ID/sync-members",
+   "source": "create_role_groups.py",
+   "needles": [
+    "SYNC_GROUPS_URL = f\"{obp_host}/obp/v7.0.0/management/groups\"",
+    "response = session.post(f\"{SYNC_GROUPS_URL}/{group_id}/sync-members\","
+   ],
+   "reads": []
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/users/USER_ID/group-entitlements",
+   "source": "create_role_groups.py",
+   "needles": [
+    "USERS_URL = f\"{obp_host}/obp/v6.0.0/users\"",
+    "response = session.get(f\"{USERS_URL}/{user_id}/group-entitlements\", headers=headers(), timeout=30)"
+   ],
+   "reads": [
+    "group_entitlements"
+   ]
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/users",
+   "source": "create_role_groups.py",
+   "needles": [
+    "USERS_URL = f\"{obp_host}/obp/v6.0.0/users\"",
+    "response = session.get(USERS_URL, params=params, headers=headers(), timeout=30)"
+   ],
+   "reads": [
+    "users",
+    "users[].user_id"
+   ]
+  },
+  {
+   "verb": "POST",
+   "path": "/obp/v7.0.0/management/users/USER_ID/sync-groups",
+   "source": "create_role_groups.py",
+   "needles": [
+    "SYNC_USERS_URL = f\"{obp_host}/obp/v7.0.0/management/users\"",
+    "response = session.post(f\"{SYNC_USERS_URL}/{user_id}/sync-groups\","
+   ],
+   "reads": []
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v6.0.0/users",
+   "source": "add_users_to_groups.py",
+   "needles": [
+    "response = session.get(USERS_URL, params=params, headers=headers(), timeout=30)"
+   ],
+   "reads": [
+    "users",
+    "users[].user_id",
+    "users[].username",
+    "users[].provider",
+    "users[].entitlements.list"
+   ],
+   "note": "USERS_URL comes from create_role_groups.py."
+  },
+  {
+   "verb": "POST",
+   "path": "/obp/v6.0.0/users/USER_ID/group-entitlements",
+   "source": "add_users_to_groups.py",
+   "needles": [
+    "response = session.post(f\"{USERS_URL}/{user_id}/group-entitlements\","
+   ],
+   "reads": [
+    "entitlements_created"
+   ]
+  },
+  {
+   "verb": "DELETE",
+   "path": "/obp/v6.0.0/users/USER_ID/group-entitlements/GROUP_ID",
+   "source": "add_users_to_groups.py",
+   "needles": [
+    "response = session.delete(f\"{USERS_URL}/{user_id}/group-entitlements/{on_obp[name]['group_id']}\","
+   ],
+   "reads": []
+  }
+ ],
+ "path_builders": [
+  {
+   "source": "obp_space.py",
+   "fragment": "return f\"/obp/{version}/management/banks/{SPACE_ID}/dynamic-entities\"",
+   "reason": "builds the path of the calls that use management_path or record_path, which are listed with both forms"
+  },
+  {
+   "source": "obp_space.py",
+   "fragment": "return f\"/obp/{version}/management/system-dynamic-entities\"",
+   "reason": "builds the path of the calls that use management_path or record_path, which are listed with both forms"
+  },
+  {
+   "source": "obp_space.py",
+   "fragment": "path = \"/obp/dynamic-entity\"",
+   "reason": "builds the path of the calls that use management_path or record_path, which are listed with both forms"
+  }
+ ],
+ "not_calls": [
+  {
+   "source": "obp_client.py",
+   "fragment": "discovery = session.get(f\"{issuer.rstrip('/')}/.well-known/openid-configuration\", timeout=10)",
+   "reason": "a call to the OIDC provider, not to OBP-API"
+  },
+  {
+   "source": "obp_client.py",
+   "fragment": "response = session.post(discovery.json()[\"token_endpoint\"], timeout=10,",
+   "reason": "a call to the OIDC provider, not to OBP-API"
+  },
+  {
+   "source": "check_client_credentials.py",
+   "fragment": "discovery = requests.get(f\"{issuer.rstrip('/')}/.well-known/openid-configuration\", timeout=10)",
+   "reason": "a call to the OIDC provider, not to OBP-API"
+  },
+  {
+   "source": "check_client_credentials.py",
+   "fragment": "response = requests.post(token_endpoint, timeout=10,",
+   "reason": "a call to the OIDC provider, not to OBP-API"
+  },
+  {
+   "source": "domain_api.py",
+   "fragment": "help=\"list it publicly at /obp/v7.0.0/banks/<bank id>/domain-apis\")",
+   "reason": "help text of an option, which names a path and sends nothing"
+  }
+ ]
+}

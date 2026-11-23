@@ -1,0 +1,23 @@
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches:
+    - develop
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install the dependencies
+        run: pip install -r requirements.txt
+      - name: Run the unit tests, including the v5.1.0 version floor
+        run: python -m unittest discover -s tests -p "test_*.py"
+      - name: Run the Dynamic Resource Docs recreate test
+        run: bash tests/test_recreate_dynamic_resource_docs.sh
